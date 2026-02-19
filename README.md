@@ -9,8 +9,11 @@ Sprinkle some annotations on your functions and get help text, autocompletion, a
 ## 🚀 Quick start
 
 ```bash
+# Install oosh
+curl -fsSL https://raw.githubusercontent.com/bruno-de-queiroz/oosh/main/install.sh | bash
+
 # Spin up a brand-new CLI called "mytool"
-./generate.sh mytool
+oosh mytool
 
 # The generator offers to install right away -- or do it later:
 mytool install
