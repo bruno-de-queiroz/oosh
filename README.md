@@ -208,4 +208,28 @@ Generated structure:
     └── uninstall.sh   # CLI uninstaller (self-deletes)
 ```
 
+## 🤖 Agent-friendly
+
+oosh is designed to be easy for AI agents to work with. To add functionality to an oosh-generated CLI, an agent just needs to drop a `.sh` file into `modules/` following this template:
+
+```bash
+#!/bin/bash
+#@module Name - short description
+
+. ${MODULES_DIR}/../oo.sh
+
+#@flag -x|--example VAR "default"
+#@description what this flag does
+
+#@public
+#@description what this command does
+function mycommand() {
+  echo "doing things with ${VAR}"
+}
+
+main $0 "$@"
+```
+
+That's it -- no config files, no registration, no build step. The module is auto-discovered and immediately available with help text, flag parsing, and tab completion. Agents can scaffold entire CLIs by generating one module per concern. 🧩
+
 Happy hacking! 🎉
