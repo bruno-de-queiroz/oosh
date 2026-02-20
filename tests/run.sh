@@ -49,6 +49,27 @@ _assert_exit() {
   fi
 }
 
+# Millisecond timestamp (portable: macOS bash 3.2 + Linux)
+_ms() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1000' 2>/dev/null \
+     || python3 -c 'import time; print(int(time.time()*1000))'; }
+
+_assert_perf() {
+  local name="$1" max_ms="$2"; shift 2
+  local t0 t1 elapsed
+  t0=$(_ms)
+  "$@" >/dev/null 2>&1
+  t1=$(_ms)
+  elapsed=$((t1 - t0))
+  if [[ "$elapsed" -le "$max_ms" ]]; then
+    printf "  \033[32m✔\033[0m  %-52s \033[2m%4dms\033[0m\n" "$name" "$elapsed"
+    PASS=$((PASS + 1))
+  else
+    printf "  \033[31m✘\033[0m  %-52s \033[31m%4dms (max: %dms)\033[0m\n" "$name" "$elapsed" "$max_ms"
+    FAIL=$((FAIL + 1))
+    ERRORS+="  - $name (${elapsed}ms > ${max_ms}ms)"$'\n'
+  fi
+}
+
 # --- fixtures ---
 
 cat > /tmp/_oosh_test_flags.sh << SCRIPT
@@ -152,8 +173,33 @@ function greet() { echo "hi"; }
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: slow dynamic enum (simulates expensive resolver like kubectl)
+cat > /tmp/_oosh_test_slow_enum.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+function _slow_resolver() { sleep 2; echo "a"; echo "b"; }
+
+#@flag -x|--item ITEM "" enum(\${_slow_resolver}) ~ slow resolved enum
+
+#@public ~ test
+function test-it() { echo "ITEM=\$ITEM"; }
+
+main \$0 "\$@"
+SCRIPT
+
+# Fixture: pure bash baseline (no oosh, just a case statement)
+cat > /tmp/_oosh_test_baseline.sh << 'SCRIPT'
+#!/bin/bash
+case "$1" in
+  greet) echo "hello" ;;
+  help)  echo "usage: test greet|help" ;;
+  *)     echo "usage: test greet|help" ;;
+esac
+SCRIPT
+
 cleanup() {
-  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh
+  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh
   rm -rf /tmp/_oosh_gen_test
 }
 trap cleanup EXIT
@@ -417,6 +463,62 @@ _assert "update restores oo.sh" "false" \
 
 _assert "modules untouched after update" "true" \
   "$([[ -f "${_GEN_CLI}/modules/hello.sh" ]] && echo true || echo false)"
+
+# ============================================================
+printf "\n\033[1m Performance \033[0m\n\n"
+
+# Baseline: pure bash, no framework
+_assert_perf "baseline: pure bash case dispatch" 200 \
+  bash /tmp/_oosh_test_baseline.sh greet
+
+# Core operations
+_assert_perf "shortlist (command listing)" 200 \
+  bash /tmp/_oosh_test_flags.sh shortlist
+
+_assert_perf "help output" 200 \
+  bash /tmp/_oosh_test_flags.sh help
+
+_assert_perf "flag parsing: boolean" 200 \
+  bash /tmp/_oosh_test_flags.sh --verbose test-bool
+
+_assert_perf "flag parsing: enum + number" 200 \
+  bash /tmp/_oosh_test_flags.sh --env dev --port 3000 test-number
+
+_assert_perf "flag parsing: all types combined" 200 \
+  bash /tmp/_oosh_test_flags.sh --verbose --env staging --port 9090 test-bool
+
+_assert_perf "shortlist: enum flag completion" 200 \
+  bash /tmp/_oosh_test_flags.sh shortlist test-enum --env
+
+_assert_perf "shortlist: file flag completion" 200 \
+  bash /tmp/_oosh_test_compat.sh shortlist greet --file
+
+# Dynamic enum: lazy resolution must NOT call the slow resolver
+_assert_perf "dynamic enum: shortlist (no flag)" 200 \
+  bash /tmp/_oosh_test_slow_enum.sh shortlist
+
+_assert_perf "dynamic enum: help (no eager resolve)" 200 \
+  bash /tmp/_oosh_test_slow_enum.sh help
+
+_assert_perf "dynamic enum: dispatch without flag" 200 \
+  bash /tmp/_oosh_test_slow_enum.sh test-it
+
+# Function normalization overhead
+_assert_perf "normalized functions: shortlist" 200 \
+  bash /tmp/_oosh_test_normalize.sh shortlist
+
+_assert_perf "normalized functions: dispatch" 200 \
+  bash /tmp/_oosh_test_normalize.sh deploy
+
+# Generated module
+_assert_perf "generated module: greet" 200 \
+  env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" greet
+
+_assert_perf "generated module: shortlist" 200 \
+  env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" shortlist
+
+_assert_perf "generated module: help" 200 \
+  env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" help
 
 # ============================================================
 printf "\n\033[1m Results \033[0m\n\n"
