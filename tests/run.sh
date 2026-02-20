@@ -468,56 +468,56 @@ _assert "modules untouched after update" "true" \
 printf "\n\033[1m Performance \033[0m\n\n"
 
 # Baseline: pure bash, no framework
-_assert_perf "baseline: pure bash case dispatch" 200 \
+_assert_perf "baseline: pure bash case dispatch" 150 \
   bash /tmp/_oosh_test_baseline.sh greet
 
 # Core operations
-_assert_perf "shortlist (command listing)" 200 \
+_assert_perf "shortlist (command listing)" 150 \
   bash /tmp/_oosh_test_flags.sh shortlist
 
-_assert_perf "help output" 200 \
+_assert_perf "help output" 150 \
   bash /tmp/_oosh_test_flags.sh help
 
-_assert_perf "flag parsing: boolean" 200 \
+_assert_perf "flag parsing: boolean" 150 \
   bash /tmp/_oosh_test_flags.sh --verbose test-bool
 
-_assert_perf "flag parsing: enum + number" 200 \
+_assert_perf "flag parsing: enum + number" 150 \
   bash /tmp/_oosh_test_flags.sh --env dev --port 3000 test-number
 
-_assert_perf "flag parsing: all types combined" 200 \
+_assert_perf "flag parsing: all types combined" 150 \
   bash /tmp/_oosh_test_flags.sh --verbose --env staging --port 9090 test-bool
 
-_assert_perf "shortlist: enum flag completion" 200 \
+_assert_perf "shortlist: enum flag completion" 150 \
   bash /tmp/_oosh_test_flags.sh shortlist test-enum --env
 
-_assert_perf "shortlist: file flag completion" 200 \
+_assert_perf "shortlist: file flag completion" 150 \
   bash /tmp/_oosh_test_compat.sh shortlist greet --file
 
 # Dynamic enum: lazy resolution must NOT call the slow resolver
-_assert_perf "dynamic enum: shortlist (no flag)" 200 \
+_assert_perf "dynamic enum: shortlist (no flag)" 150 \
   bash /tmp/_oosh_test_slow_enum.sh shortlist
 
-_assert_perf "dynamic enum: help (no eager resolve)" 200 \
+_assert_perf "dynamic enum: help (no eager resolve)" 150 \
   bash /tmp/_oosh_test_slow_enum.sh help
 
-_assert_perf "dynamic enum: dispatch without flag" 200 \
+_assert_perf "dynamic enum: dispatch without flag" 150 \
   bash /tmp/_oosh_test_slow_enum.sh test-it
 
 # Function normalization overhead
-_assert_perf "normalized functions: shortlist" 200 \
+_assert_perf "normalized functions: shortlist" 150 \
   bash /tmp/_oosh_test_normalize.sh shortlist
 
-_assert_perf "normalized functions: dispatch" 200 \
+_assert_perf "normalized functions: dispatch" 150 \
   bash /tmp/_oosh_test_normalize.sh deploy
 
 # Generated module
-_assert_perf "generated module: greet" 200 \
+_assert_perf "generated module: greet" 150 \
   env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" greet
 
-_assert_perf "generated module: shortlist" 200 \
+_assert_perf "generated module: shortlist" 150 \
   env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" shortlist
 
-_assert_perf "generated module: help" 200 \
+_assert_perf "generated module: help" 150 \
   env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" help
 
 # ============================================================

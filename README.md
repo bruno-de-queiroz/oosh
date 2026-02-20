@@ -280,4 +280,34 @@ main $0 "$@"
 
 That's it -- no config files, no registration, no build step. The module is auto-discovered and immediately available with help text, flag parsing, and tab completion. Agents can scaffold entire CLIs by generating one module per concern. 🧩
 
+## ⏱️ Performance
+
+oosh parses annotations at runtime — no compilation, no caching. Here's the overhead vs a hand-rolled pure bash CLI (~130 lines of manual flag parsing, case statements, help text, and completion) doing the same job that oosh does in ~45 lines of annotations.
+
+**macOS (bash 3.2, Apple Silicon, 20 runs)**
+
+| Operation | bash | oosh | Overhead |
+|---|---|---|---|
+| Tab-complete: top-level | 17ms | 51ms | +34ms |
+| Tab-complete: command flags | 17ms | 72ms | +55ms |
+| Tab-complete: enum values | 16ms | 58ms | +42ms |
+| Help | 23ms | 106ms | +83ms |
+| Dispatch: simple command | 16ms | 45ms | +29ms |
+| Dispatch: 3 global + 3 local flags | 20ms | 46ms | +26ms |
+| Dispatch: flags + boolean | 18ms | 46ms | +28ms |
+
+**Linux (bash 5.1, Docker ubuntu:22.04, 20 runs)**
+
+| Operation | bash | oosh | Overhead |
+|---|---|---|---|
+| Tab-complete: top-level | 3ms | 15ms | +12ms |
+| Tab-complete: command flags | 2ms | 19ms | +17ms |
+| Tab-complete: enum values | 3ms | 17ms | +14ms |
+| Help | 3ms | 25ms | +22ms |
+| Dispatch: simple command | 3ms | 15ms | +12ms |
+| Dispatch: 3 global + 3 local flags | 3ms | 15ms | +12ms |
+| Dispatch: flags + boolean | 3ms | 14ms | +11ms |
+
+Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 30ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~10-14ms on macOS, ~2-3ms on Linux).
+
 Happy hacking! 🎉
