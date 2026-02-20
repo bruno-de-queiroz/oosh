@@ -194,6 +194,16 @@ This will:
 
 And when you're done? `<name> uninstall` cleans everything up. No leftovers. 🧹
 
+### 🔄 Updating
+
+To update the oosh framework in an existing CLI, just run the generator again with the same name:
+
+```bash
+oosh mytool
+```
+
+If the directory already exists and contains `oo.sh`, the generator will offer to update it in place -- your modules and configuration are left untouched.
+
 ## 🎨 Colors
 
 Output is colored by default because life's too short for monochrome terminals. Three ways to tame it:
