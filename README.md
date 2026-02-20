@@ -79,35 +79,53 @@ And each module gets its own help too:
   help                 show options and flags available
 ```
 
+Method-scoped flags appear indented under their command:
+
+```
+  Usage: mytool [ deploy status help ] [ -v ]
+
+  Flags:
+  -v|--verbose         enable verbose output
+
+  Commands:
+  deploy               deploy the app
+    -e|--env           target environment
+    -f|--file          config file path
+  status               check status
+  help                 show options and flags available
+```
+
 ## 🏷️ Annotations reference
 
 | Annotation | Where | What it does |
 |---|---|---|
 | `#@module Description` | Top of module file | Module description shown in help |
-| `#@public` | Before a function | Expose as a user-facing command |
-| `#@protected` | Before a function | Hide from help/shortlist -- still callable internally |
-| `#@flag -s\|--long VAR "default" [file\|dir]` | Before a function or top-level | Declare a flag with short/long form, env var, default, and optional type |
-| `#@description text` | After `#@flag` or `#@public`/`#@protected` | Description for the preceding flag or function |
+| `#@public [~ description]` | Before a function | Expose as a user-facing command |
+| `#@protected [~ description]` | Before a function | Hide from help/shortlist -- still callable internally |
+| `#@flag -s\|--long VAR "default" [file\|dir] [~ description]` | Before a function or top-level | Declare a flag with short/long form, env var, default, and optional type |
+| `#@description text` | After `#@flag` or `#@public`/`#@protected` | Legacy alternative to inline `~` descriptions |
+
+Descriptions can be written inline using `~` on the same line, or on a separate `#@description` line (backward compatible). Flags declared after `#@public`/`#@protected` are scoped to that method and shown indented under it in help output.
 
 ## 🚩 Flag syntax
 
 ```bash
-#@flag -e|--env VARNAME "default"
-#@description target environment
+#@flag -e|--env VARNAME "default" ~ target environment
 
-#@flag -f|--file FILEPATH "" file
-#@description path to config file (triggers file completion)
+#@flag -f|--file FILEPATH "" file ~ path to config file (triggers file completion)
 
-#@flag -d|--dir DIRPATH "" dir
-#@description output directory (triggers dir completion)
+#@flag -d|--dir DIRPATH "" dir ~ output directory (triggers dir completion)
 ```
 
 - Short and long forms separated by `|`
 - Variable name must be `UPPER_SNAKE_CASE`
 - Default value in double quotes (empty string = no default)
 - Optional type: `file` or `dir` -- enables file/directory autocompletion for that flag 💡
+- Optional description after `~` separator (or use `#@description` on the next line)
 
 Flags are parsed from `$@` and exported as environment variables. If a flag isn't provided and the variable is unset, the default kicks in.
+
+**Method-scoped flags**: Flags declared after `#@public`/`#@protected` (but before the `function` line) belong to that method. They're shown indented under the command in help output and only appear in tab-completion when that command is selected.
 
 ## 🧱 Module structure
 
@@ -118,17 +136,15 @@ Flags are parsed from `$@` and exported as environment variables. If a flag isn'
 #import oo.sh
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -e|--env ENVIRONMENT "production"
-#@description target environment
+#@flag -v|--verbose VERBOSE "false" ~ enable verbose output
 
-#@public
-#@description deploy the app
+#@public ~ deploy the app
+#@flag -e|--env ENVIRONMENT "production" ~ target environment
 function deploy() {
   echo "Deploying to ${ENVIRONMENT}..."
 }
 
-#@protected
-#@description internal helper
+#@protected ~ internal helper
 function _validate() {
   # hidden from help and shortlist -- your little secret 🤫
   echo "validating..."
@@ -137,6 +153,8 @@ function _validate() {
 # Bootstraps the parser
 main $0 "$@"
 ```
+
+In the example above, `-v|--verbose` is a **module-level flag** (available to all commands), while `-e|--env` is **scoped to deploy** (shown only under the deploy command in help).
 
 Every module **must** end with `main $0 "$@"` to bootstrap the annotation parser. Don't forget this or nothing works! ⚠️
 
@@ -218,11 +236,9 @@ oosh is designed to be easy for AI agents to work with. To add functionality to 
 
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -x|--example VAR "default"
-#@description what this flag does
+#@flag -x|--example VAR "default" ~ what this flag does
 
-#@public
-#@description what this command does
+#@public ~ what this command does
 function mycommand() {
   echo "doing things with ${VAR}"
 }

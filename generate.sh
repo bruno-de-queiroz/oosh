@@ -154,23 +154,19 @@ cat > "${OUT_DIR}/modules/hello.sh" <<'MODULE'
 #import oo.sh
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -n|--name NAME "world"
-#@description who to greet
+#@flag -n|--name NAME "world" ~ who to greet
 
-#@public
-#@description say hello
+#@public ~ say hello
 function greet() {
   echo "Hello, ${NAME}!"
 }
 
-#@public
-#@description say goodbye
+#@public ~ say goodbye
 function farewell() {
   echo "Goodbye, ${NAME}!"
 }
 
-#@protected
-#@description internal helper
+#@protected ~ internal helper
 function _format() {
   echo "(this is a protected method)"
 }
@@ -195,8 +191,7 @@ function _call() {
   _default_call "\$@"
 }
 
-#@protected
-#@description find a writable bin directory
+#@protected ~ find a writable bin directory
 function _find_bin_dir() {
   local d
   for d in /opt/homebrew/bin /usr/local/bin \${HOME}/.local/bin; do
@@ -210,8 +205,7 @@ function _find_bin_dir() {
   echo "\${HOME}/.local/bin"
 }
 
-#@protected
-#@description find bash completion directory
+#@protected ~ find bash completion directory
 function _find_comp_dir() {
   local d
   for d in /opt/homebrew/etc/bash_completion.d \
@@ -231,8 +225,7 @@ function _find_comp_dir() {
   echo "\$d"
 }
 
-#@public
-#@description install the ${NAME} cli
+#@public ~ install the ${NAME} cli
 function cli() {
   if [[ -n \$(command -v ${NAME}) ]]; then
     _info "${NAME} is already installed"
@@ -274,8 +267,7 @@ function _call() {
   _default_call "\$@"
 }
 
-#@public
-#@description uninstall ${NAME} and remove all files
+#@public ~ uninstall ${NAME} and remove all files
 function cli() {
   read -p "Remove ${NAME} and delete ${OUT_DIR}? (y/N) " -n 1 -r
   echo ""
