@@ -267,8 +267,8 @@ _assert_contains "help shows enum values in brackets" \
   "[dev, staging, prod]" \
   "$(bash /tmp/_oosh_test_flags.sh help 2>&1)"
 
-_assert_contains "dynamic enum help shows resolved values" \
-  "[alpha, beta, gamma]" \
+_assert_contains "dynamic enum help does not eagerly resolve" \
+  "dynamic env" \
   "$(bash /tmp/_oosh_test_dynamic_enum.sh help 2>&1)"
 
 # ============================================================

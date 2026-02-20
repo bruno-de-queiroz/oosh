@@ -174,20 +174,19 @@ main() {
     local _enum_vals="" _enum_dynamic="" _enum_store=""
     if [[ "$p_ftype" =~ $_re_enum_dyn ]]; then
       _enum_dynamic="${BASH_REMATCH[1]}"
-      _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
-      _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
       _enum_store='${'"${_enum_dynamic}"'}'
     elif [[ "$p_ftype" =~ $_re_enum_static ]]; then
       _enum_vals="${BASH_REMATCH[1]}"
       _enum_store="$_enum_vals"
     fi
-    # Build help line (append enum values to description)
+    # Build help line (append enum values to description for static enums)
     local help_desc="$p_fdesc"
     [[ -n "$_enum_vals" ]] && help_desc+=" [${_enum_vals//,/, }]"
     local help_line=$(printf "%-20s %s" "$p_flag" "$help_desc")
     local _short="${p_flag%%|*}" _long="${p_flag#*|}"
 
     # --- Value extraction ---
+    local _was_set=false
     if [[ "$p_ftype" == "boolean" ]]; then
       if [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
         local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
@@ -200,20 +199,27 @@ main() {
         else
           export "$p_var=true"; str="${str/${s}${BASH_REMATCH[1]}/}"
         fi
+        _was_set=true
       elif [[ "$str" == *"${s}${_short}" || "$str" == *"${s}${_long}" ]]; then
         export "$p_var=true"; str="${str/${s}${_short}/}"; str="${str/${s}${_long}/}"
+        _was_set=true
       else
         [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
       fi
     elif [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
       local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
       export "$p_var=$val"; str="${str/${BASH_REMATCH[0]}/}"
+      _was_set=true
     else
       [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
     fi
 
-    # --- Validation ---
+    # --- Validation (dynamic enums resolved lazily, only when flag was set) ---
     local _val="${!p_var}"
+    if [[ -n "$_enum_dynamic" && "$_was_set" == true && -n "$_val" ]]; then
+      _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
+      _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
+    fi
     if [[ -n "$_enum_vals" && -n "$_val" ]]; then
       [[ ",${_enum_vals}," == *",${_val},"* ]] || _die "invalid value '${_val}' for $p_flag (expected: ${_enum_vals//,/, })"
     fi
