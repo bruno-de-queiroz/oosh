@@ -8,7 +8,7 @@
 # Annotation-driven bash CLI framework.
 # Function discovery, flag parsing, help and autocompletion.
 #
-# Annotations:  #@public  #@protected  #@flag  #@description  #@module
+# Annotations:  #@public  #@protected  #@flag  #@description  #@module  #@version
 # Flag syntax:  #@flag -e|--env VARNAME "default" [file|dir|boolean|number|enum(...)] [~ description]
 #
 # Usage:
@@ -19,10 +19,13 @@
 #   main $0 "$@"
 #
 
+OO_VERSION="0.3.0"
+
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
 GLOBAL_FLAGS=""
 GLOBAL_PREFIX=""
+GLOBAL_VERSION=""
 _SL_FILE_FLAGS=""
 _SL_DIR_FLAGS=""
 _SL_ENUM=""
@@ -127,14 +130,22 @@ _default_help() {
   echo ""
 }
 
+_default_version() {
+  local name="$(basename "${GLOBAL_SCRIPT//.sh/}")"
+  [[ -n "$GLOBAL_VERSION" ]] && printf "%s %s " "$name" "$GLOBAL_VERSION"
+  printf "(oosh %s)\n" "$OO_VERSION"
+}
+
 _default_call() {
   local first="$1"; shift
   if printf '%b\n' "$GLOBAL_METHODS" | grep -q "^${first} "; then
     "$first" "$@"; exit 0
   fi
   case "$first" in
-    shortlist) _shortlist "$@" ;;
-    *)         _help ;;
+    shortlist)            _shortlist "$@" ;;
+    help|--help|-h)       _help ;;
+    version|--version|-V) _version ;;
+    *)                    _help ;;
   esac
 }
 
@@ -142,12 +153,13 @@ _default_call() {
 _shortlist() { _default_shortlist "$@"; }
 _help()      { _default_help "$@"; }
 _call()      { _default_call "$@"; }
+_version()   { _default_version "$@"; }
 
 main() {
   local script="$1"; shift
   local s=$'\x1F' str=""
   (( $# )) && printf -v str "${s}%s" "$@"
-  local flags="" methods="" file_flags="" dir_flags="" enum_flags=""
+  local flags="" methods="" file_flags="" dir_flags="" enum_flags="" version=""
   local p_vis="" p_desc="" p_flag="" p_var="" p_def="" p_fdesc="" p_ftype=""
   local mf_help="" mf_file="" mf_dir="" mf_enum=""
 
@@ -248,6 +260,8 @@ main() {
         p_flag="${BASH_REMATCH[1]}"; p_var="${BASH_REMATCH[2]}"; p_def="${BASH_REMATCH[3]}"; p_ftype="${BASH_REMATCH[4]}"; p_fdesc="${BASH_REMATCH[6]}" ;;
       '#@description '*)
         [[ -n "$p_flag" ]] && p_fdesc="${t#'#@description '}" || p_desc="${t#'#@description '}" ;;
+      '#@version '*)
+        version="${t#'#@version '}" ;;
       '#@'*|'#'*|'') ;;
       'function '*)
         _flush_flag
@@ -279,6 +293,7 @@ main() {
   GLOBAL_SCRIPT="$script"
   GLOBAL_FLAGS="$flags"
   GLOBAL_METHODS="$methods"
+  GLOBAL_VERSION="$version"
   _SL_FILE_FLAGS="$file_flags"
   _SL_DIR_FLAGS="$dir_flags"
   _SL_ENUM="$enum_flags"

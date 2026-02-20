@@ -131,7 +131,28 @@ function greet() { echo "Hello, \${NAME}! file=\${FILEPATH} dir=\${DIRPATH}"; }
 main \$0 "\$@"
 SCRIPT
 
-cleanup() { rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh; }
+cat > /tmp/_oosh_test_versioned.sh << SCRIPT
+#!/bin/bash
+#@version 2.5.0
+. ${OOSH_DIR}/oo.sh
+
+#@public ~ say hi
+function greet() { echo "hi"; }
+
+main \$0 "\$@"
+SCRIPT
+
+cat > /tmp/_oosh_test_unversioned.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+#@public ~ say hi
+function greet() { echo "hi"; }
+
+main \$0 "\$@"
+SCRIPT
+
+cleanup() { rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh; }
 trap cleanup EXIT
 
 # ============================================================
@@ -282,6 +303,40 @@ _assert "file completion returns __file__" \
 _assert "dir completion returns __dir__" \
   "__dir__" \
   "$(bash /tmp/_oosh_test_compat.sh shortlist greet --dir)"
+
+# ============================================================
+printf "\n\033[1m --help / -h \033[0m\n\n"
+
+_assert_contains "--help shows usage" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_flags.sh --help 2>&1)"
+
+_assert_contains "-h shows usage" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_flags.sh -h 2>&1)"
+
+# ============================================================
+printf "\n\033[1m --version / -V \033[0m\n\n"
+
+_assert_contains "--version with #@version shows CLI and oosh version" \
+  "2.5.0" \
+  "$(bash /tmp/_oosh_test_versioned.sh --version)"
+
+_assert_contains "--version shows oosh version" \
+  "oosh" \
+  "$(bash /tmp/_oosh_test_versioned.sh --version)"
+
+_assert_contains "-V works" \
+  "oosh" \
+  "$(bash /tmp/_oosh_test_versioned.sh -V)"
+
+_assert_contains "version subcommand works" \
+  "2.5.0" \
+  "$(bash /tmp/_oosh_test_versioned.sh version)"
+
+_assert_contains "--version without #@version shows only oosh" \
+  "(oosh" \
+  "$(bash /tmp/_oosh_test_unversioned.sh --version)"
 
 # ============================================================
 printf "\n\033[1m Results \033[0m\n\n"
