@@ -33,7 +33,8 @@ _head() { printf "\n  ${DOT}  ${B}%s${RST}\n\n" "$*"; }
 _fail() { printf "\n  ${ERR}  ${RD}%s${RST}\n\n" "$*" >&2; exit 1; }
 
 # --- args ---
-OOSH_DIR="$(cd "$(dirname "$0")" && pwd)"
+_resolve() { local s="$1"; while [ -L "$s" ]; do local d="$(cd "$(dirname "$s")" && pwd)"; s="$(readlink "$s")"; [[ "$s" != /* ]] && s="$d/$s"; done; echo "$s"; }
+OOSH_DIR="$(cd "$(dirname "$(_resolve "$0")")" && pwd)"
 
 [[ $# -lt 1 ]] && { printf "\n  ${B}Usage:${RST} $0 ${CY}<name>${RST} ${DIM}[--no-color] [output-dir]${RST}\n\n"; exit 1; }
 
@@ -347,4 +348,6 @@ printf "\n  ${GR}${B}Done!${RST} ${DIM}Get started:${RST}\n"
 printf "\n    ${ARROW}  ${B}${NAME} help${RST}"
 printf "\n    ${ARROW}  ${B}${NAME} hello greet${RST}"
 printf "\n    ${ARROW}  ${B}${NAME} hello greet --name ${YL}World${RST}"
+printf "\n\n  ${DIM}Open a new shell or run:${RST}"
+printf "\n    ${B}source ${OUT_DIR}/${NAME}.comp.sh${RST}"
 printf "\n\n"
