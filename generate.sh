@@ -51,7 +51,22 @@ printf '   \\___/  \\___/  |___/ |_| |_|\n'
 printf "${RST}\n"
 _head "${NAME} ${DIM}→${RST} ${B}${OUT_DIR}"
 
-[[ -d "$OUT_DIR" ]] && _fail "${OUT_DIR} already exists"
+if [[ -d "$OUT_DIR" ]]; then
+  if [[ -f "${OUT_DIR}/oo.sh" ]]; then
+    printf "  ${DOT}  ${B}${OUT_DIR} already exists.${RST} ${DIM}Update oo.sh? (Y/n)${RST} "
+    read -n 1 -r REPLY; echo ""
+    if [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
+      cp "${OOSH_DIR}/oo.sh" "${OUT_DIR}/oo.sh"
+      _step "oo.sh" "framework updated"
+      printf "\n  ${GR}${B}Done!${RST}\n\n"
+    else
+      printf "  ${DIM}   Skipped${RST}\n\n"
+    fi
+    exit 0
+  else
+    _fail "${OUT_DIR} already exists (not an oosh project)"
+  fi
+fi
 
 mkdir -p "${OUT_DIR}/modules"
 
