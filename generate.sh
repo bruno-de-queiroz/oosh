@@ -175,7 +175,7 @@ cat > "${OUT_DIR}/modules/hello.sh" <<'MODULE'
 #@public ~ say hello
 function greet() {
   local msg="Hello, ${NAME}!"
-  [[ "$UPPERCASE" == true ]] && msg="${msg^^}"
+  [[ "$UPPERCASE" == true ]] && msg="$(echo "$msg" | tr '[:lower:]' '[:upper:]')"
   echo "$msg"
 }
 
