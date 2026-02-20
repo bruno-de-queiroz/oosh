@@ -170,10 +170,13 @@ cat > "${OUT_DIR}/modules/hello.sh" <<'MODULE'
 . ${MODULES_DIR}/../oo.sh
 
 #@flag -n|--name NAME "world" ~ who to greet
+#@flag -u|--uppercase UPPERCASE "false" boolean ~ uppercase the greeting
 
 #@public ~ say hello
 function greet() {
-  echo "Hello, ${NAME}!"
+  local msg="Hello, ${NAME}!"
+  [[ "$UPPERCASE" == true ]] && msg="${msg^^}"
+  echo "$msg"
 }
 
 #@public ~ say goodbye

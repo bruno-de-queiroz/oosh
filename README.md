@@ -102,7 +102,7 @@ Method-scoped flags appear indented under their command:
 | `#@module Description` | Top of module file | Module description shown in help |
 | `#@public [~ description]` | Before a function | Expose as a user-facing command |
 | `#@protected [~ description]` | Before a function | Hide from help/shortlist -- still callable internally |
-| `#@flag -s\|--long VAR "default" [file\|dir] [~ description]` | Before a function or top-level | Declare a flag with short/long form, env var, default, and optional type |
+| `#@flag -s\|--long VAR "default" [type] [~ description]` | Before a function or top-level | Declare a flag with short/long form, env var, default, and optional type |
 | `#@description text` | After `#@flag` or `#@public`/`#@protected` | Legacy alternative to inline `~` descriptions |
 
 Descriptions can be written inline using `~` on the same line, or on a separate `#@description` line (backward compatible). Flags declared after `#@public`/`#@protected` are scoped to that method and shown indented under it in help output.
@@ -115,13 +115,31 @@ Descriptions can be written inline using `~` on the same line, or on a separate 
 #@flag -f|--file FILEPATH "" file ~ path to config file (triggers file completion)
 
 #@flag -d|--dir DIRPATH "" dir ~ output directory (triggers dir completion)
+
+#@flag -v|--verbose VERBOSE "false" boolean ~ toggle flag (doesn't consume the next arg)
+
+#@flag -p|--port PORT "8080" number ~ validated as numeric
+
+#@flag -e|--env ENVIRONMENT "production" enum(dev,staging,prod) ~ validated against allowed values
+
+#@flag -b|--branch BRANCH "" enum(${_get_branches}) ~ dynamic enum resolved by calling a function
 ```
+
+| Type | Completion | Validation |
+|---|---|---|
+| *(none)* | -- | -- |
+| `file` | file completion | -- |
+| `dir` | directory completion | -- |
+| `boolean` | -- | toggle: `--flag` sets `true`, only consumes `true/false/1/0/yes/no` |
+| `number` | -- | must be numeric |
+| `enum(a,b,c)` | completes with listed values | must match one of the listed values |
+| `enum(${func})` | calls `func` at completion time | calls `func` at parse time for validation |
 
 - Short and long forms separated by `|`
 - Variable name must be `UPPER_SNAKE_CASE`
 - Default value in double quotes (empty string = no default)
-- Optional type: `file` or `dir` -- enables file/directory autocompletion for that flag 💡
 - Optional description after `~` separator (or use `#@description` on the next line)
+- Function declarations work with or without the `function` keyword (`deploy() {` and `function deploy()` are both discovered)
 
 Flags are parsed from `$@` and exported as environment variables. If a flag isn't provided and the variable is unset, the default kicks in.
 
@@ -136,10 +154,10 @@ Flags are parsed from `$@` and exported as environment variables. If a flag isn'
 #import oo.sh
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -v|--verbose VERBOSE "false" ~ enable verbose output
+#@flag -v|--verbose VERBOSE "false" boolean ~ enable verbose output
 
 #@public ~ deploy the app
-#@flag -e|--env ENVIRONMENT "production" ~ target environment
+#@flag -e|--env ENVIRONMENT "production" enum(dev,staging,prod) ~ target environment
 function deploy() {
   echo "Deploying to ${ENVIRONMENT}..."
 }
@@ -176,7 +194,7 @@ Special markers:
 - `__file__` -- triggers file completion
 - `__dir__` -- triggers directory completion
 
-These are returned automatically when a flag is declared with the `file` or `dir` type. No extra wiring needed. 🪄
+These are returned automatically when a flag is declared with the `file` or `dir` type. Enum flags return their allowed values directly (static values or the output of a dynamic function). No extra wiring needed. 🪄
 
 ### 📦 Installation
 
@@ -247,6 +265,7 @@ oosh is designed to be easy for AI agents to work with. To add functionality to 
 . ${MODULES_DIR}/../oo.sh
 
 #@flag -x|--example VAR "default" ~ what this flag does
+# types: file, dir, boolean, number, enum(a,b,c), enum(${func})
 
 #@public ~ what this command does
 function mycommand() {

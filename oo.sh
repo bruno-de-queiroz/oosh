@@ -9,7 +9,7 @@
 # Function discovery, flag parsing, help and autocompletion.
 #
 # Annotations:  #@public  #@protected  #@flag  #@description  #@module
-# Flag syntax:  #@flag -e|--env VARNAME "default" [file|dir] [~ description]
+# Flag syntax:  #@flag -e|--env VARNAME "default" [file|dir|boolean|number|enum(...)] [~ description]
 #
 # Usage:
 #   source oo.sh
@@ -25,6 +25,7 @@ GLOBAL_FLAGS=""
 GLOBAL_PREFIX=""
 _SL_FILE_FLAGS=""
 _SL_DIR_FLAGS=""
+_SL_ENUM=""
 
 # --- colors (set OO_COLOR=0 to disable, or export NO_COLOR) ---
 OO_COLOR="${OO_COLOR:-1}"
@@ -44,18 +45,42 @@ _info()  { printf "  ${_GR}✔${_RST}  %s\n" "$*"; }
 _error() { printf "  ${_RD}✘${_RST}  %s\n" "$*" >&2; }
 _die()   { _error "$*"; exit 1; }
 
+_resolve_enum() {
+  local _el=" ${_SL_ENUM}" _key="$1"
+  local _re_dyn='^\$\{([^}]+)\}$'
+  if [[ "$_el" == *" ${_key}="* ]]; then
+    local _tmp="${_el#* ${_key}=}"; _tmp="${_tmp%% *}"
+    if [[ "$_tmp" =~ $_re_dyn ]]; then
+      "${BASH_REMATCH[1]}" 2>/dev/null
+    else
+      echo "${_tmp}" | tr ',' ' '
+    fi
+  fi
+}
+
 _default_shortlist() {
   if [[ -n "$1" ]] && printf '%b\n' "$GLOBAL_METHODS" | grep -q "^${1} "; then
     if [[ -n "$2" && "$2" =~ ^- ]]; then
-      [[ " ${_SL_FILE_FLAGS}" == *" ${2} "* || " ${_SL_FILE_FLAGS}" == *" ${1}:${2} "* ]] && echo __file__
-      [[ " ${_SL_DIR_FLAGS}" == *" ${2} "* || " ${_SL_DIR_FLAGS}" == *" ${1}:${2} "* ]] && echo __dir__
+      if [[ " ${_SL_FILE_FLAGS}" == *" ${2} "* || " ${_SL_FILE_FLAGS}" == *" ${1}:${2} "* ]]; then
+        echo __file__
+      elif [[ " ${_SL_DIR_FLAGS}" == *" ${2} "* || " ${_SL_DIR_FLAGS}" == *" ${1}:${2} "* ]]; then
+        echo __dir__
+      else
+        local _r=$(_resolve_enum "${2}"); [[ -z "$_r" ]] && _r=$(_resolve_enum "${1}:${2}")
+        [[ -n "$_r" ]] && echo "$_r"
+      fi
       return 0
     fi
     printf '%b\n' "$GLOBAL_FLAGS" | grep -v ':' | cut -f 1 -d " " | tr "|" " "
     printf '%b\n' "$GLOBAL_FLAGS" | grep "^${1}:" | sed "s/^${1}://" | cut -f 1 -d " " | tr "|" " "
   elif [[ -n "$1" && "$1" =~ ^- ]]; then
-    [[ " ${_SL_FILE_FLAGS}" == *" ${1} "* ]] && echo __file__
-    [[ " ${_SL_DIR_FLAGS}" == *" ${1} "* ]] && echo __dir__
+    if [[ " ${_SL_FILE_FLAGS}" == *" ${1} "* ]]; then
+      echo __file__
+    elif [[ " ${_SL_DIR_FLAGS}" == *" ${1} "* ]]; then
+      echo __dir__
+    else
+      local _r=$(_resolve_enum "${1}"); [[ -n "$_r" ]] && echo "$_r"
+    fi
     return 0
   else
     printf '%b\n' "$GLOBAL_METHODS" | cut -f 1 -d " "
@@ -122,34 +147,96 @@ main() {
   local script="$1"; shift
   local s=$'\x1F' str=""
   (( $# )) && printf -v str "${s}%s" "$@"
-  local flags="" methods="" file_flags="" dir_flags=""
+  local flags="" methods="" file_flags="" dir_flags="" enum_flags=""
   local p_vis="" p_desc="" p_flag="" p_var="" p_def="" p_fdesc="" p_ftype=""
-  local mf_help="" mf_file="" mf_dir=""
+  local mf_help="" mf_file="" mf_dir="" mf_enum=""
+
+  # Regex patterns stored in variables for bash 3.2 compatibility
+  local _re_enum_dyn='^enum\(\$\{([^}]+)\}\)$'
+  local _re_enum_static='^enum\(([^)]+)\)$'
 
   # Flush pending flag: build help string + extract value from args
   _flush_flag() {
     [[ -z "$p_flag" ]] && return
-    local help_line=$(printf "%-20s %s" "$p_flag" "$p_fdesc")
+    # Parse enum — static enum(a,b,c) or dynamic enum(${funcname})
+    local _enum_vals="" _enum_dynamic="" _enum_store=""
+    if [[ "$p_ftype" =~ $_re_enum_dyn ]]; then
+      _enum_dynamic="${BASH_REMATCH[1]}"
+      _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
+      _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
+      _enum_store='${'"${_enum_dynamic}"'}'
+    elif [[ "$p_ftype" =~ $_re_enum_static ]]; then
+      _enum_vals="${BASH_REMATCH[1]}"
+      _enum_store="$_enum_vals"
+    fi
+    # Build help line (append enum values to description)
+    local help_desc="$p_fdesc"
+    [[ -n "$_enum_vals" ]] && help_desc+=" [${_enum_vals//,/, }]"
+    local help_line=$(printf "%-20s %s" "$p_flag" "$help_desc")
+    local _short="${p_flag%%|*}" _long="${p_flag#*|}"
 
-    if [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
+    # --- Value extraction ---
+    if [[ "$p_ftype" == "boolean" ]]; then
+      if [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
+        local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
+        local _consume=false
+        [[ "${BASH_REMATCH[2]}" == "=" ]] && _consume=true
+        case "$val" in true|false|1|0|yes|no) _consume=true ;; esac
+        if [[ "$_consume" == true ]]; then
+          [[ -z "$val" ]] && val=true
+          export "$p_var=$val"; str="${str/${BASH_REMATCH[0]}/}"
+        else
+          export "$p_var=true"; str="${str/${s}${BASH_REMATCH[1]}/}"
+        fi
+      elif [[ "$str" == *"${s}${_short}" || "$str" == *"${s}${_long}" ]]; then
+        export "$p_var=true"; str="${str/${s}${_short}/}"; str="${str/${s}${_long}/}"
+      else
+        [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
+      fi
+    elif [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
       local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
       export "$p_var=$val"; str="${str/${BASH_REMATCH[0]}/}"
     else
       [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
     fi
-    local _short="${p_flag%%|*}" _long="${p_flag#*|}"
+
+    # --- Validation ---
+    local _val="${!p_var}"
+    if [[ -n "$_enum_vals" && -n "$_val" ]]; then
+      [[ ",${_enum_vals}," == *",${_val},"* ]] || _die "invalid value '${_val}' for $p_flag (expected: ${_enum_vals//,/, })"
+    fi
+    if [[ "$p_ftype" == "number" && -n "$_val" ]]; then
+      [[ "$_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] || _die "invalid value '${_val}' for $p_flag (expected: number)"
+    fi
+
+    # --- Store help + completion info ---
+    local _ftype="$p_ftype"; [[ "$_ftype" == enum* ]] && _ftype=enum
     if [[ -n "$p_vis" ]]; then
       [[ -n "$mf_help" ]] && mf_help+=$'\n'; mf_help+="$help_line"
-      case "$p_ftype" in file) mf_file+="${_short} ${_long} " ;; dir) mf_dir+="${_short} ${_long} " ;; esac
+      case "$_ftype" in
+        file) mf_file+="${_short} ${_long} " ;;
+        dir)  mf_dir+="${_short} ${_long} " ;;
+        enum) mf_enum+="${_short}=${_enum_store} ${_long}=${_enum_store} " ;;
+      esac
     else
       [[ -n "$flags" ]] && flags+=$'\n'; flags+="$help_line"
-      case "$p_ftype" in file) file_flags+="${_short} ${_long} " ;; dir) dir_flags+="${_short} ${_long} " ;; esac
+      case "$_ftype" in
+        file) file_flags+="${_short} ${_long} " ;;
+        dir)  dir_flags+="${_short} ${_long} " ;;
+        enum) enum_flags+="${_short}=${_enum_store} ${_long}=${_enum_store} " ;;
+      esac
     fi
     p_flag="" p_var="" p_def="" p_fdesc="" p_ftype=""
   }
 
   while IFS= read -r line; do
     local t="${line#"${line%%[![:space:]]*}"}"
+    # Normalize function declarations: name() { → function name()
+    if [[ ! "$t" == '#'* && "$t" =~ ^([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\)[[:space:]]*\{?[[:space:]]*$ ]]; then
+      t="function ${BASH_REMATCH[1]}()"
+    elif [[ "$t" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\)[[:space:]]*\{? ]]; then
+      t="function ${BASH_REMATCH[1]}()"
+    fi
     case "$t" in
       '#@public'*|'#@protected'*)
         _flush_flag
@@ -157,7 +244,7 @@ main() {
         [[ "$t" =~ ~[[:space:]]+(.*) ]] && p_desc="${BASH_REMATCH[1]}" ;;
       '#@flag '*)
         _flush_flag
-        [[ "$t" =~ ^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+\"([^\"]*)\"[[:space:]]*([a-z]*)[[:space:]]*(~[[:space:]]+(.*))? ]]
+        [[ "$t" =~ ^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+\"([^\"]*)\"[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))? ]]
         p_flag="${BASH_REMATCH[1]}"; p_var="${BASH_REMATCH[2]}"; p_def="${BASH_REMATCH[3]}"; p_ftype="${BASH_REMATCH[4]}"; p_fdesc="${BASH_REMATCH[6]}" ;;
       '#@description '*)
         [[ -n "$p_flag" ]] && p_fdesc="${t#'#@description '}" || p_desc="${t#'#@description '}" ;;
@@ -179,9 +266,12 @@ main() {
           if [[ -n "$mf_dir" ]]; then
             for _t in $mf_dir; do dir_flags+="${fname}:${_t} "; done
           fi
+          if [[ -n "$mf_enum" ]]; then
+            for _t in $mf_enum; do enum_flags+="${fname}:${_t} "; done
+          fi
         fi
-        p_vis="" p_desc="" mf_help="" mf_file="" mf_dir="" ;;
-      *) _flush_flag; p_vis="" p_desc="" mf_help="" mf_file="" mf_dir="" ;;
+        p_vis="" p_desc="" mf_help="" mf_file="" mf_dir="" mf_enum="" ;;
+      *) _flush_flag; p_vis="" p_desc="" mf_help="" mf_file="" mf_dir="" mf_enum="" ;;
     esac
   done < "$script"
   _flush_flag; unset -f _flush_flag
@@ -191,6 +281,7 @@ main() {
   GLOBAL_METHODS="$methods"
   _SL_FILE_FLAGS="$file_flags"
   _SL_DIR_FLAGS="$dir_flags"
+  _SL_ENUM="$enum_flags"
 
   str="${str#${s}}"
   local old_ifs="$IFS"; IFS="$s"; local all=($str); IFS="$old_ifs"

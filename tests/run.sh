@@ -1,0 +1,295 @@
+#!/bin/bash
+set -euo pipefail
+
+OOSH_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+PASS=0 FAIL=0 ERRORS=""
+
+_assert() {
+  local name="$1" expected="$2" actual="$3"
+  if [[ "$actual" == "$expected" ]]; then
+    printf "  \033[32m✔\033[0m  %s\n" "$name"
+    PASS=$((PASS + 1))
+  else
+    printf "  \033[31m✘\033[0m  %s\n" "$name"
+    printf "      expected: %s\n" "$expected"
+    printf "      actual:   %s\n" "$actual"
+    FAIL=$((FAIL + 1))
+    ERRORS+="  - $name"$'\n'
+  fi
+}
+
+_assert_contains() {
+  local name="$1" needle="$2" haystack="$3"
+  if [[ "$haystack" == *"$needle"* ]]; then
+    printf "  \033[32m✔\033[0m  %s\n" "$name"
+    PASS=$((PASS + 1))
+  else
+    printf "  \033[31m✘\033[0m  %s\n" "$name"
+    printf "      expected to contain: %s\n" "$needle"
+    printf "      actual:              %s\n" "$haystack"
+    FAIL=$((FAIL + 1))
+    ERRORS+="  - $name"$'\n'
+  fi
+}
+
+_assert_exit() {
+  local name="$1" expected_exit="$2"; shift 2
+  local out
+  out=$("$@" 2>&1) && local rc=$? || local rc=$?
+  if [[ "$rc" -eq "$expected_exit" ]]; then
+    printf "  \033[32m✔\033[0m  %s\n" "$name"
+    PASS=$((PASS + 1))
+  else
+    printf "  \033[31m✘\033[0m  %s\n" "$name"
+    printf "      expected exit: %s\n" "$expected_exit"
+    printf "      actual exit:   %s\n" "$rc"
+    printf "      output:        %s\n" "$out"
+    FAIL=$((FAIL + 1))
+    ERRORS+="  - $name"$'\n'
+  fi
+}
+
+# --- fixtures ---
+
+cat > /tmp/_oosh_test_flags.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+#@flag -v|--verbose VERBOSE "false" boolean ~ enable verbose output
+#@flag -p|--port PORT "8080" number ~ server port
+#@flag -e|--env ENVIRONMENT "prod" enum(dev,staging,prod) ~ target environment
+
+#@public ~ test boolean flags
+#@flag -d|--dry-run DRY_RUN "false" boolean ~ dry run mode
+function test-bool() { echo "VERBOSE=\$VERBOSE DRY_RUN=\$DRY_RUN"; }
+
+#@public ~ test enum flags
+function test-enum() { echo "ENVIRONMENT=\$ENVIRONMENT"; }
+
+#@public ~ test number flags
+function test-number() { echo "PORT=\$PORT"; }
+
+main \$0 "\$@"
+SCRIPT
+
+cat > /tmp/_oosh_test_normalize.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+#@public ~ style 1
+deploy() {
+  echo "deploy"
+}
+
+#@public ~ style 2
+build(){
+  echo "build"
+}
+
+#@public ~ style 3
+function test-it(){
+  echo "test-it"
+}
+
+#@public ~ style 4
+function release() {
+  echo "release"
+}
+
+main \$0 "\$@"
+SCRIPT
+
+cat > /tmp/_oosh_test_dynamic_enum.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+function _get_envs() { echo "alpha"; echo "beta"; echo "gamma"; }
+
+#@flag -e|--env ENVIRONMENT "" enum(\${_get_envs}) ~ dynamic env
+
+#@public ~ test dynamic enum
+function test-it() { echo "ENVIRONMENT=\$ENVIRONMENT"; }
+
+main \$0 "\$@"
+SCRIPT
+
+cat > /tmp/_oosh_test_compat.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+#@flag -f|--file FILEPATH "" file
+#@description config file path
+#@flag -d|--dir DIRPATH "" dir
+#@description output directory
+#@flag -n|--name NAME "world"
+#@description who to greet
+
+#@public
+#@description say hello
+function greet() { echo "Hello, \${NAME}! file=\${FILEPATH} dir=\${DIRPATH}"; }
+
+main \$0 "\$@"
+SCRIPT
+
+cleanup() { rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh; }
+trap cleanup EXIT
+
+# ============================================================
+printf "\n\033[1m Boolean flags \033[0m\n\n"
+
+_assert "--verbose (no value) sets true" \
+  "VERBOSE=true DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool)"
+
+_assert "--verbose false sets false" \
+  "VERBOSE=false DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose false test-bool)"
+
+_assert "--verbose before method sets true without consuming method" \
+  "VERBOSE=true DRY_RUN=true" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool --dry-run)"
+
+_assert "boolean at end of args" \
+  "VERBOSE=false DRY_RUN=true" \
+  "$(bash /tmp/_oosh_test_flags.sh test-bool --dry-run)"
+
+_assert "boolean default when not provided" \
+  "VERBOSE=false DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh test-bool)"
+
+_assert "--verbose yes sets yes" \
+  "VERBOSE=yes DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose yes test-bool)"
+
+_assert "--verbose 1 sets 1" \
+  "VERBOSE=1 DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose 1 test-bool)"
+
+# ============================================================
+printf "\n\033[1m Enum flags (static) \033[0m\n\n"
+
+_assert "enum --env staging accepted" \
+  "ENVIRONMENT=staging" \
+  "$(bash /tmp/_oosh_test_flags.sh --env staging test-enum)"
+
+_assert "enum --env dev accepted" \
+  "ENVIRONMENT=dev" \
+  "$(bash /tmp/_oosh_test_flags.sh --env dev test-enum)"
+
+_assert_exit "enum --env invalid rejected" 1 \
+  bash /tmp/_oosh_test_flags.sh --env invalid test-enum
+
+_assert "enum default value" \
+  "ENVIRONMENT=prod" \
+  "$(bash /tmp/_oosh_test_flags.sh test-enum)"
+
+# ============================================================
+printf "\n\033[1m Enum flags (dynamic) \033[0m\n\n"
+
+_assert "dynamic enum --env beta accepted" \
+  "ENVIRONMENT=beta" \
+  "$(bash /tmp/_oosh_test_dynamic_enum.sh --env beta test-it)"
+
+_assert_exit "dynamic enum --env invalid rejected" 1 \
+  bash /tmp/_oosh_test_dynamic_enum.sh --env invalid test-it
+
+# ============================================================
+printf "\n\033[1m Number flags \033[0m\n\n"
+
+_assert "number --port 3000 accepted" \
+  "PORT=3000" \
+  "$(bash /tmp/_oosh_test_flags.sh --port 3000 test-number)"
+
+_assert "number --port -42 accepted" \
+  "PORT=-42" \
+  "$(bash /tmp/_oosh_test_flags.sh --port -42 test-number)"
+
+_assert "number --port 3.14 accepted" \
+  "PORT=3.14" \
+  "$(bash /tmp/_oosh_test_flags.sh --port 3.14 test-number)"
+
+_assert_exit "number --port abc rejected" 1 \
+  bash /tmp/_oosh_test_flags.sh --port abc test-number
+
+_assert "number default value" \
+  "PORT=8080" \
+  "$(bash /tmp/_oosh_test_flags.sh test-number)"
+
+# ============================================================
+printf "\n\033[1m Tab completion \033[0m\n\n"
+
+_assert "enum completion returns values" \
+  "dev staging prod" \
+  "$(bash /tmp/_oosh_test_flags.sh shortlist test-enum --env)"
+
+_assert "dynamic enum completion returns values" \
+  "$(printf 'alpha\nbeta\ngamma')" \
+  "$(bash /tmp/_oosh_test_dynamic_enum.sh shortlist test-it --env)"
+
+_assert "top-level enum completion returns values" \
+  "dev staging prod" \
+  "$(bash /tmp/_oosh_test_flags.sh shortlist --env)"
+
+# ============================================================
+printf "\n\033[1m Help output \033[0m\n\n"
+
+_assert_contains "help shows enum values in brackets" \
+  "[dev, staging, prod]" \
+  "$(bash /tmp/_oosh_test_flags.sh help 2>&1)"
+
+_assert_contains "dynamic enum help shows resolved values" \
+  "[alpha, beta, gamma]" \
+  "$(bash /tmp/_oosh_test_dynamic_enum.sh help 2>&1)"
+
+# ============================================================
+printf "\n\033[1m Function normalization \033[0m\n\n"
+
+_assert "name() { discovered" \
+  "deploy" \
+  "$(bash /tmp/_oosh_test_normalize.sh deploy)"
+
+_assert "name(){ discovered" \
+  "build" \
+  "$(bash /tmp/_oosh_test_normalize.sh build)"
+
+_assert "function name(){ discovered" \
+  "test-it" \
+  "$(bash /tmp/_oosh_test_normalize.sh test-it)"
+
+_assert "function name() { discovered" \
+  "release" \
+  "$(bash /tmp/_oosh_test_normalize.sh release)"
+
+_assert_contains "shortlist lists all normalized functions" \
+  "deploy" \
+  "$(bash /tmp/_oosh_test_normalize.sh shortlist)"
+
+_assert_contains "shortlist lists build" \
+  "build" \
+  "$(bash /tmp/_oosh_test_normalize.sh shortlist)"
+
+# ============================================================
+printf "\n\033[1m Backward compatibility \033[0m\n\n"
+
+_assert "old-style file/dir/#@description flags work" \
+  "Hello, Test! file=/etc/hosts dir=/tmp" \
+  "$(bash /tmp/_oosh_test_compat.sh --name Test --file /etc/hosts --dir /tmp greet)"
+
+_assert "file completion returns __file__" \
+  "__file__" \
+  "$(bash /tmp/_oosh_test_compat.sh shortlist greet --file)"
+
+_assert "dir completion returns __dir__" \
+  "__dir__" \
+  "$(bash /tmp/_oosh_test_compat.sh shortlist greet --dir)"
+
+# ============================================================
+printf "\n\033[1m Results \033[0m\n\n"
+
+if [[ $FAIL -eq 0 ]]; then
+  printf "  \033[32m%d passed, 0 failed\033[0m\n\n" "$PASS"
+else
+  printf "  \033[32m%d passed\033[0m, \033[31m%d failed:\033[0m\n" "$PASS" "$FAIL"
+  printf "%s\n" "$ERRORS"
+  exit 1
+fi
