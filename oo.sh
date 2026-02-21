@@ -19,7 +19,7 @@
 #   main $0 "$@"
 #
 
-OO_VERSION="0.3.0"
+OO_VERSION="1.0.0"
 
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
@@ -374,8 +374,11 @@ main() {
         [[ "$t" =~ ~[[:space:]]+(.*) ]] && p_desc="${BASH_REMATCH[1]}" ;;
       '#@flag '*)
         _flush_flag
-        [[ "$t" =~ $_re_flag ]]
-        p_flag="${BASH_REMATCH[1]}"; p_var="${BASH_REMATCH[2]}"; p_def="${BASH_REMATCH[3]//\\\"/\"}"; p_ftype="${BASH_REMATCH[5]}"; p_fdesc="${BASH_REMATCH[7]}" ;;
+        if [[ "$t" =~ $_re_flag ]]; then
+          p_flag="${BASH_REMATCH[1]}"; p_var="${BASH_REMATCH[2]}"; p_def="${BASH_REMATCH[3]//\\\"/\"}"; p_ftype="${BASH_REMATCH[5]}"; p_fdesc="${BASH_REMATCH[7]}"
+        else
+          _error "malformed #@flag in $(basename "$script") — skipped"
+        fi ;;
       '#@description '*)
         [[ -n "$p_flag" ]] && p_fdesc="${t#'#@description '}" || p_desc="${t#'#@description '}" ;;
       '#@version '*)

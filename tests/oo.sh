@@ -199,6 +199,17 @@ SCRIPT
   printf 'main $0 "$@"\n'
 } > /tmp/_oosh_test_escaped_quotes.sh
 
+# Fixture: malformed flag annotation (missing quotes around default)
+cat > /tmp/_oosh_test_malformed.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@flag -v|--verbose VERBOSE "false" boolean ~ works fine
+#@flag -b|--broken BROKEN default_no_quotes ~ missing quotes
+#@public ~ test it
+function test-it() { echo "VERBOSE=\$VERBOSE BROKEN=\$BROKEN"; }
+main \$0 "\$@"
+SCRIPT
+
 # Fixture: required flags + env var fallback
 cat > /tmp/_oosh_test_required.sh << SCRIPT
 #!/bin/bash
@@ -220,7 +231,8 @@ cleanup() {
        /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh \
        /tmp/_oosh_test_array.sh /tmp/_oosh_test_array_enum.sh \
        /tmp/_oosh_test_array_dyn.sh /tmp/_oosh_test_array_default.sh \
-       /tmp/_oosh_test_escaped_quotes.sh /tmp/_oosh_test_required.sh
+       /tmp/_oosh_test_escaped_quotes.sh /tmp/_oosh_test_malformed.sh \
+       /tmp/_oosh_test_required.sh
 }
 trap cleanup EXIT
 
@@ -544,6 +556,17 @@ _assert_contains "unknown flag: --vrebose warns on stderr" \
 _assert_not_contains "known flag: --verbose no warning" \
   "ignored unknown flag" \
   "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool 2>&1)"
+
+# ============================================================
+printf "\n\033[1m Malformed annotations \033[0m\n\n"
+
+_assert_contains "malformed #@flag: warns on stderr" \
+  "malformed #@flag" \
+  "$(bash /tmp/_oosh_test_malformed.sh test-it 2>&1)"
+
+_assert_contains "malformed #@flag: valid flag still works" \
+  "VERBOSE=true" \
+  "$(bash /tmp/_oosh_test_malformed.sh --verbose test-it 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Unknown command \033[0m\n\n"

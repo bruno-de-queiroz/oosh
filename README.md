@@ -385,6 +385,191 @@ main $0 "$@"
 
 That's it -- no config files, no registration, no build step. The module is auto-discovered and immediately available with help text, flag parsing, and tab completion. Agents can scaffold entire CLIs by generating one module per concern. 🧩
 
+## 📋 Known limitations
+
+- **Two-level command nesting** — oosh supports `cli module command` (entry point dispatches to a module, module dispatches to a function). Arbitrary depth (`cli foo bar baz`) is not supported. Each module is a self-contained script with its own `main` call.
+- **Control characters in values** — flag values are internally delimited with `\x1F` (unit separator) and arrays use `\x1E` (record separator). Values containing these characters will be split incorrectly. This is a non-issue in practice but worth knowing if you're piping binary data through flags.
+- **Global variables** — the framework uses `GLOBAL_SCRIPT`, `GLOBAL_METHODS`, `GLOBAL_FLAGS`, `GLOBAL_PREFIX`, `GLOBAL_VERSION`, and `_SL_*` variables at the top level. These are reset on each `main()` call and isolated per-process in the module system, but avoid naming your own variables with these names.
+
+## 💡 Cheatsheet
+
+Patterns for things oosh doesn't handle natively.
+
+### Mutually exclusive flags
+
+Validate in your function body — oosh parses both, you enforce the constraint:
+
+```bash
+#@public ~ deploy the app
+#@flag -s|--staging DEPLOY_STAGING "false" boolean ~ deploy to staging
+#@flag -p|--production DEPLOY_PRODUCTION "false" boolean ~ deploy to production
+function deploy() {
+  if [[ "$DEPLOY_STAGING" == true && "$DEPLOY_PRODUCTION" == true ]]; then
+    _error "--staging and --production are mutually exclusive"; exit 2
+  fi
+}
+```
+
+Alternatively, use an enum to make it a single choice:
+
+```bash
+#@flag -t|--target DEPLOY_TARGET "staging" enum(staging,production) ~ deployment target
+```
+
+### Dynamic enum from a slow source
+
+Wrap the call in a function that caches to a temp file:
+
+```bash
+_get_namespaces() {
+  local cache="/tmp/_ns_cache_$$"
+  if [[ ! -f "$cache" ]]; then
+    kubectl get ns -o name | sed 's|namespace/||' > "$cache"
+  fi
+  cat "$cache"
+}
+#@flag -n|--namespace DEPLOY_NS "" enum(${_get_namespaces}) ~ k8s namespace
+```
+
+oosh resolves dynamic enums lazily (only when the flag is actually used), so help and shortlist won't trigger the slow call. But tab-completing the flag will — the cache helps there.
+
+### Multiline or computed enum values
+
+Dynamic enums can return any list — build it however you want:
+
+```bash
+_get_regions() {
+  # hardcoded but maintainable in one place
+  printf "us-east-1\nus-west-2\neu-west-1\nap-southeast-1\n"
+}
+
+_get_envs() {
+  # computed from directory contents
+  ls environments/ | sed 's/\.yaml$//'
+}
+#@flag -r|--region DEPLOY_REGION "" enum(${_get_regions}) ~ AWS region
+#@flag -e|--env DEPLOY_ENV "" enum(${_get_envs}) ~ environment config
+```
+
+### Dependent flags (flag B only makes sense with flag A)
+
+Validate the dependency in your function:
+
+```bash
+#@flag -f|--format REPORT_FORMAT "text" enum(text,json,csv) ~ output format
+#@flag -o|--output REPORT_OUTPUT "" file ~ write to file (requires --format json or csv)
+function report() {
+  if [[ -n "$REPORT_OUTPUT" && "$REPORT_FORMAT" == "text" ]]; then
+    _error "--output requires --format json or csv"; exit 2
+  fi
+}
+```
+
+### Flag value with spaces
+
+Users can quote values or use `=` syntax:
+
+```bash
+mytool --name "John Doe"
+mytool --name="John Doe"
+```
+
+### Default that references another variable
+
+Compute it in the function body — annotation defaults are static strings or env var lookups:
+
+```bash
+#@flag -o|--output DEPLOY_OUTPUT "" ~ output path
+function deploy() {
+  : "${DEPLOY_OUTPUT:="${DEPLOY_TARGET}/build"}"  # set default from another flag
+}
+```
+
+### Global pre-flight checks
+
+Override `_call` in your entry point or module to run validation before dispatch:
+
+```bash
+_call() {
+  # skip checks for help/completion
+  case "$1" in help|shortlist|--help|-h|--version|-V) _default_call "$@"; return ;; esac
+
+  # pre-flight
+  command -v docker >/dev/null || { _error "docker is required"; exit 1; }
+
+  _default_call "$@"
+}
+```
+
+### Custom help sections
+
+Override `_help` to append or replace the default output:
+
+```bash
+_help() {
+  _default_help
+  printf "  ${_B}Examples:${_RST}\n"
+  printf "  ${_DIM}%s${_RST}\n" "mytool deploy --env staging"
+  printf "  ${_DIM}%s${_RST}\n" "mytool deploy --env production --dry-run"
+  echo ""
+}
+```
+
+### Deeper command nesting
+
+oosh natively supports two levels (`cli module command`). For deeper nesting like `mytool db migrate up`, override `_shortlist` and `_call` in your module to add a sub-group:
+
+```bash
+#!/bin/bash
+#@module DB - database operations
+
+. ${MODULES_DIR}/../oo.sh
+
+# --- sub-group: migrate ---
+_migrate_commands="up down status"
+
+migrate-up()     { echo "running migrations..."; }
+migrate-down()   { echo "rolling back..."; }
+migrate-status() { echo "pending: 3"; }
+
+# --- top-level commands ---
+#@public ~ seed the database
+function seed() { echo "seeding..."; }
+
+_shortlist() {
+  case "$1" in
+    migrate)
+      # third level: mytool db migrate <tab>
+      if [[ -n "$2" ]]; then
+        _default_shortlist migrate "$2"  # handle flags on migrate sub-commands
+      else
+        echo $_migrate_commands
+      fi ;;
+    *)
+      _default_shortlist "$@"
+      echo migrate  # add migrate as a completable word alongside seed, help
+      ;;
+  esac
+}
+
+_call() {
+  case "$1" in
+    migrate)
+      local sub="${2:-help}"; shift 2 2>/dev/null || shift
+      case "$sub" in
+        up|down|status) "migrate-${sub}" "$@" ;;
+        help) printf "\n  Usage: db migrate [ ${_migrate_commands} ]\n\n" ;;
+        *)    _error "unknown migrate command '${sub}'"; exit 2 ;;
+      esac ;;
+    *) _default_call "$@" ;;
+  esac
+}
+
+main $0 "$@"
+```
+
+This gives you `mytool db migrate up`, `mytool db migrate status`, etc. with working tab completion at every level. The pattern scales — add more sub-groups by extending the `case` statements in `_shortlist` and `_call`.
+
 ## ⏱️ Performance
 
 oosh parses annotations at runtime — no compilation, no caching. The display and dispatch layer (`help`, `shortlist`, `_call`) uses zero external process forks — all string operations are pure bash builtins (`${var%%pattern}`, `${var//old/new}`, glob matching). Here's the overhead vs a hand-rolled pure bash CLI (~130 lines of manual flag parsing, case statements, help text, and completion) doing the same job that oosh does in ~45 lines of annotations.
