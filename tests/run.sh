@@ -551,7 +551,7 @@ _assert_perf "generated module: help" 150 \
 # ============================================================
 printf "\n\033[1m Trace \033[0m\n\n"
 
-_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_flags.sh -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_flags.sh -r 1 -t 200 2>&1) && _trace_rc=$? || _trace_rc=$?
 _assert "trace: fast module exits 0" "0" "$_trace_rc"
 _assert_contains "trace: output contains Shortlist header" "Shortlist" "$_trace_out"
 _assert_contains "trace: output contains Help header" "Help" "$_trace_out"
