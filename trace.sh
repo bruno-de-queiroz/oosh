@@ -75,6 +75,15 @@ _ms() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1000' 2>/dev/null \
 
 _WARNINGS=0  _SLOWEST=""  _SLOWEST_MS=0
 
+# Calibrate _ms() overhead (each call spawns perl/python3)
+_MS_OVERHEAD=0
+_cal_total=0
+for _cal_i in 1 2 3 4 5; do
+  _cal_t0=$(_ms); _cal_t1=$(_ms)
+  _cal_total=$((_cal_total + _cal_t1 - _cal_t0))
+done
+_MS_OVERHEAD=$((_cal_total / 5))
+
 _run() {
   if [[ -n "$_MOD_ENV" ]]; then
     env "$_MOD_ENV" bash "$SCRIPT" "$@"
@@ -83,23 +92,43 @@ _run() {
   fi
 }
 
+_PREMEASURED_MS=""  # set by _trace_flags to pass first-run timing
+
 _trace() {
   local label="$1"; shift
-  local t0 t1 i
-  t0=$(_ms)
-  for (( i=0; i<RUNS; i++ )); do
+  local _min=999999 _max=0 _total=0 _start=0 i t0 t1 elapsed
+  # If caller already measured the first run, use that timing
+  if [[ -n "$_PREMEASURED_MS" ]]; then
+    elapsed=$_PREMEASURED_MS
+    _total=$elapsed
+    [[ $elapsed -lt $_min ]] && _min=$elapsed
+    [[ $elapsed -gt $_max ]] && _max=$elapsed
+    _start=1
+    _PREMEASURED_MS=""
+  fi
+  for (( i=_start; i<RUNS; i++ )); do
+    t0=$(_ms)
     _run "$@" >/dev/null 2>&1
+    t1=$(_ms)
+    elapsed=$((t1 - t0 - _MS_OVERHEAD))
+    [[ $elapsed -lt 0 ]] && elapsed=0
+    _total=$((_total + elapsed))
+    [[ $elapsed -lt $_min ]] && _min=$elapsed
+    [[ $elapsed -gt $_max ]] && _max=$elapsed
   done
-  t1=$(_ms)
-  local elapsed=$(( (t1 - t0) / RUNS ))
+  local avg=$((_total / RUNS))
   local color="$GR" icon="$OK"
-  if [[ "$elapsed" -gt "$THRESHOLD" ]]; then
+  if [[ "$_max" -gt "$THRESHOLD" ]]; then
     color="$RD"; icon="$ERR"; _WARNINGS=$((_WARNINGS + 1))
-  elif [[ "$elapsed" -ge 100 ]]; then
+  elif [[ "$_max" -ge 100 ]]; then
     color="$YL"; icon="${YL}✔${RST}"
   fi
-  [[ "$elapsed" -gt "$_SLOWEST_MS" ]] && { _SLOWEST_MS="$elapsed"; _SLOWEST="$label"; }
-  printf "  %s  %-45s ${color}%dms${RST}\n" "$icon" "$label" "$elapsed"
+  [[ "$_max" -gt "$_SLOWEST_MS" ]] && { _SLOWEST_MS="$_max"; _SLOWEST="$label"; }
+  if [[ $RUNS -gt 1 ]]; then
+    printf "  %s  %-40s ${color}%dms${RST} ${DIM}min: %d  avg: %d${RST}\n" "$icon" "$label" "$_max" "$_min" "$avg"
+  else
+    printf "  %s  %-45s ${color}%dms${RST}\n" "$icon" "$label" "$_max"
+  fi
 }
 
 # --- banner ---
@@ -132,11 +161,16 @@ _trace_flags() {
   done <<< "$items"
   local to_trace="${longs:-$shorts}"
   [[ -z "$to_trace" ]] && return 0
-  local count=0 output _w _is_completion
+  local count=0 output _w _is_completion _pre_t0 _pre_t1 _pre_elapsed
   while IFS= read -r flag; do
     [[ -z "$flag" ]] && continue
     [[ $count -ge $MAX_ITEMS ]] && break
+    # Time the pre-check call so we capture cold/uncached timing
+    _pre_t0=$(_ms)
     output=$(_run shortlist "$@" "$flag" 2>/dev/null || true)
+    _pre_t1=$(_ms)
+    _pre_elapsed=$((_pre_t1 - _pre_t0 - _MS_OVERHEAD))
+    [[ $_pre_elapsed -lt 0 ]] && _pre_elapsed=0
     if [[ -n "$output" && "$output" != "__file__" && "$output" != "__dir__" ]]; then
       # Skip if output is only flags (boolean consumed, parent listing echoed)
       _is_completion=false
@@ -144,6 +178,8 @@ _trace_flags() {
         case "$_w" in -*) ;; *) _is_completion=true; break ;; esac
       done
       if [[ "$_is_completion" == true ]]; then
+        # Pass the pre-measured cold timing as the first run
+        _PREMEASURED_MS=$_pre_elapsed
         _trace "$label_prefix $flag" shortlist "$@" "$flag"
       fi
     fi
@@ -223,7 +259,10 @@ fi
 # --- crawl: Help ---
 printf "\n  ${B}Help${RST}\n\n"
 
-if [[ -n "$_SCOPE_LABEL" ]]; then
+if [[ -n "$SCOPE_CMD" && -n "$SCOPE_MOD" ]]; then
+  # Command scope: trace help at module level (avoids dispatching real commands)
+  _trace "$SCOPE_MOD help" "$SCOPE_MOD" help
+elif [[ -n "$_SCOPE_LABEL" ]]; then
   # shellcheck disable=SC2086
   _trace "${_SCOPE_LABEL# } help" ${_SCOPE_LABEL} help
 else
