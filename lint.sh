@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# oosh validate — static analysis for oosh CLI scripts
+# oosh lint — static analysis for oosh CLI scripts
 #
-# Usage: oosh validate <target> [module] [--no-color]
+# Usage: oosh lint <target> [module] [--fix] [--no-color]
 #
 
 set -euo pipefail
@@ -28,7 +28,13 @@ _fail() { printf "\n  ${ERR}  ${RD}%s${RST}\n\n" "$*" >&2; exit 1; }
 _resolve() { local s="$1"; while [ -L "$s" ]; do local d="$(cd "$(dirname "$s")" && pwd)"; s="$(readlink "$s")"; [[ "$s" != /* ]] && s="$d/$s"; done; echo "$s"; }
 
 # --- arg parsing ---
-TARGET=""  SCOPE_MOD=""
+TARGET=""  SCOPE_MOD=""  _FIX=0
+
+_ARGS2=()
+for _a in "$@"; do
+  [[ "$_a" == "--fix" ]] && _FIX=1 || _ARGS2+=("$_a")
+done
+set -- "${_ARGS2[@]+"${_ARGS2[@]}"}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,7 +47,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -z "$TARGET" ]] && { printf "\n  ${B}Usage:${RST} oosh validate ${CY}<target>${RST} ${DIM}[module] [--no-color]${RST}\n\n"; exit 1; }
+[[ -z "$TARGET" ]] && { printf "\n  ${B}Usage:${RST} oosh lint ${CY}<target>${RST} ${DIM}[module] [--fix] [--no-color]${RST}\n\n"; exit 1; }
 
 # --- target resolution (same as trace.sh) ---
 SCRIPT=""
@@ -99,6 +105,21 @@ _report_warning() {
   _WARNINGS=$((_WARNINGS + 1))
 }
 
+# --fix: collect fixable actions (newline-delimited)
+# Format: "rename:file:OLD_VAR:NEW_VAR" or "desc:file:LINE_NUM"
+_FIXES=""
+_add_fix() {
+  [[ "$_FIX" == "1" ]] || return 0
+  [[ -n "$_FIXES" ]] && _FIXES+=$'\n'
+  _FIXES+="$1"
+}
+
+_report_no_desc() {
+  local file="$1" line_num="$2" var="$3"
+  _report_warning "$file" "$line_num" "flag ${var} has no description"
+  _add_fix "desc:${file}:${line_num}"
+}
+
 _is_valid_type() {
   local t="$1"
   [[ -z "$t" ]] && return 0
@@ -124,6 +145,11 @@ _validate_file() {
   local prev_flag_line=0 prev_flag_var="" prev_flag_fdesc=""
   # Track flag names within this file: "scope:flagname "
   local file_flag_names=""
+  # Expected variable prefix from filename: hello.sh → HELLO_, my-tool.sh → MY_TOOL_
+  local _base_name
+  _base_name="$(basename "$file" .sh)"
+  _base_name="$(echo "$_base_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+  local _expected_prefix="${_base_name}_"
 
   while IFS= read -r line; do
     line_num=$((line_num + 1))
@@ -148,7 +174,7 @@ _validate_file() {
         # Handle deferred missing-description check from previous flag
         if [[ -n "$prev_flag_var" && -z "$prev_flag_fdesc" ]]; then
           # Check if THIS line is #@description (it's not — it's visibility)
-          _report_warning "$file" "$prev_flag_line" "flag ${prev_flag_var} has no description"
+          _report_no_desc "$file" "$prev_flag_line" "$prev_flag_var"
         fi
         prev_flag_var="" prev_flag_fdesc="" prev_flag_line=0
         [[ "$t" == '#@public'* ]] && pending_vis="public" || pending_vis="protected"
@@ -158,7 +184,7 @@ _validate_file() {
       '#@flag '*)
         # Handle deferred missing-description check from previous flag
         if [[ -n "$prev_flag_var" && -z "$prev_flag_fdesc" ]]; then
-          _report_warning "$file" "$prev_flag_line" "flag ${prev_flag_var} has no description"
+          _report_no_desc "$file" "$prev_flag_line" "$prev_flag_var"
         fi
         if [[ "$t" =~ $_RE_FLAG ]]; then
           local flag_name="${BASH_REMATCH[1]}"
@@ -193,6 +219,12 @@ _validate_file() {
             _report_warning "$file" "$line_num" "${flag_var} shadows oosh internal"
           fi
 
+          # Check variable name prefix
+          if [[ "$flag_var" != "${_expected_prefix}"* ]]; then
+            _report_warning "$file" "$line_num" "${flag_var} should be prefixed as ${_expected_prefix}${flag_var}"
+            _add_fix "rename:${file}:${flag_var}:${_expected_prefix}${flag_var}"
+          fi
+
           # Defer description check (next line might be #@description)
           prev_flag_line=$line_num
           prev_flag_var="$flag_var"
@@ -220,7 +252,7 @@ _validate_file() {
           fi
           # Handle deferred missing-description check
           if [[ -n "$prev_flag_var" && -z "$prev_flag_fdesc" ]]; then
-            _report_warning "$file" "$prev_flag_line" "flag ${prev_flag_var} has no description"
+            _report_no_desc "$file" "$prev_flag_line" "$prev_flag_var"
           fi
           prev_flag_var="" prev_flag_fdesc="" prev_flag_line=0
         else
@@ -231,7 +263,7 @@ _validate_file() {
           fi
           # Handle deferred missing-description check
           if [[ -n "$prev_flag_var" && -z "$prev_flag_fdesc" ]]; then
-            _report_warning "$file" "$prev_flag_line" "flag ${prev_flag_var} has no description"
+            _report_no_desc "$file" "$prev_flag_line" "$prev_flag_var"
           fi
           prev_flag_var="" prev_flag_fdesc="" prev_flag_line=0
           scope="__global__"
@@ -245,7 +277,7 @@ _validate_file() {
     _report_error "$file" "$pending_vis_line" "orphaned #@${pending_vis} — not followed by a function"
   fi
   if [[ -n "$prev_flag_var" && -z "$prev_flag_fdesc" ]]; then
-    _report_warning "$file" "$prev_flag_line" "flag ${prev_flag_var} has no description"
+    _report_no_desc "$file" "$prev_flag_line" "$prev_flag_var"
   fi
 }
 
@@ -258,7 +290,11 @@ printf '   \\___/  \\___/  |___/ |_| |_|\n'
 printf "${RST}\n"
 
 _CLI="$(basename "${SCRIPT//.sh/}")"
-printf "  ${DOT}  ${B}oosh validate${RST} ${DIM}—${RST} ${B}%s${RST}\n" "$_CLI"
+if [[ "$_FIX" == "1" ]]; then
+  printf "  ${DOT}  ${B}oosh lint --fix${RST} ${DIM}—${RST} ${B}%s${RST}\n" "$_CLI"
+else
+  printf "  ${DOT}  ${B}oosh lint${RST} ${DIM}—${RST} ${B}%s${RST}\n" "$_CLI"
+fi
 
 # --- module discovery ---
 _SCRIPT_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
@@ -345,21 +381,54 @@ for _entry in $_ALL_VAR_NAMES; do
   fi
 done
 
+# --- apply fixes ---
+_FIXED=0
+if [[ "$_FIX" == "1" && -n "$_FIXES" ]]; then
+  printf "\n"
+  while IFS= read -r _fix; do
+    [[ -z "$_fix" ]] && continue
+    local_type="${_fix%%:*}"; _rest="${_fix#*:}"
+    if [[ "$local_type" == "rename" ]]; then
+      local_file="${_rest%%:*}"; _rest="${_rest#*:}"
+      local_old="${_rest%%:*}"; local_new="${_rest#*:}"
+      # Replace var name in #@flag annotation line
+      sed -i.bak \
+        -e "s/ ${local_old} / ${local_new} /g" \
+        -e "s/\\\${${local_old}}/\${${local_new}}/g" \
+        -e "s/\\\$${local_old}/\$${local_new}/g" \
+        "$local_file"
+      rm -f "${local_file}.bak"
+      printf "  ${OK}  ${GR}fixed${RST} %s — %s → %s\n" "$(basename "$local_file")" "$local_old" "$local_new"
+      _FIXED=$((_FIXED + 1))
+    elif [[ "$local_type" == "desc" ]]; then
+      local_file="${_rest%%:*}"; local_line="${_rest#*:}"
+      # Append ~ TODO to the #@flag line (before any trailing comment)
+      sed -i.bak "${local_line}s/\$/ ~ TODO/" "$local_file"
+      rm -f "${local_file}.bak"
+      printf "  ${OK}  ${GR}fixed${RST} %s:%d — added placeholder description\n" "$(basename "$local_file")" "$local_line"
+      _FIXED=$((_FIXED + 1))
+    fi
+  done <<< "$_FIXES"
+fi
+
 # --- summary ---
 printf "\n  ${DIM}%d command(s), %d flag(s) across %d file(s)${RST}\n" "$_TOTAL_COMMANDS" "$_TOTAL_FLAGS" "$_FILE_COUNT"
+
+_fix_msg=""
+[[ $_FIXED -gt 0 ]] && _fix_msg=", ${GR}${_FIXED} fixed${RST}"
 
 if [[ $_ERRORS -gt 0 ]]; then
   _es=""; [[ $_ERRORS -gt 1 ]] && _es="s"
   _ws=""; [[ $_WARNINGS -gt 1 ]] && _ws="s"
   if [[ $_WARNINGS -gt 0 ]]; then
-    printf "  ${RD}%d error%s${RST}, ${YL}%d warning%s${RST}\n\n" "$_ERRORS" "$_es" "$_WARNINGS" "$_ws"
+    printf "  ${RD}%d error%s${RST}, ${YL}%d warning%s${RST}%s\n\n" "$_ERRORS" "$_es" "$_WARNINGS" "$_ws" "$_fix_msg"
   else
-    printf "  ${RD}%d error%s${RST}\n\n" "$_ERRORS" "$_es"
+    printf "  ${RD}%d error%s${RST}%s\n\n" "$_ERRORS" "$_es" "$_fix_msg"
   fi
   exit 1
 elif [[ $_WARNINGS -gt 0 ]]; then
   _ws=""; [[ $_WARNINGS -gt 1 ]] && _ws="s"
-  printf "  ${YL}%d warning%s${RST}\n\n" "$_WARNINGS" "$_ws"
+  printf "  ${YL}%d warning%s${RST}%s\n\n" "$_WARNINGS" "$_ws" "$_fix_msg"
 else
   printf "  ${GR}0 errors, 0 warnings${RST}\n\n"
 fi

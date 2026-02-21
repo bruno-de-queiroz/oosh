@@ -113,19 +113,19 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 ## 🚩 Flag syntax
 
 ```bash
-#@flag -e|--env VARNAME "default" ~ target environment
+#@flag -e|--env DEPLOY_ENV "default" ~ target environment
 
-#@flag -f|--file FILEPATH "" file ~ path to config file (triggers file completion)
+#@flag -f|--file DEPLOY_FILEPATH "" file ~ path to config file (triggers file completion)
 
-#@flag -d|--dir DIRPATH "" dir ~ output directory (triggers dir completion)
+#@flag -d|--dir DEPLOY_DIRPATH "" dir ~ output directory (triggers dir completion)
 
-#@flag -v|--verbose VERBOSE "false" boolean ~ toggle flag (doesn't consume the next arg)
+#@flag -v|--verbose DEPLOY_VERBOSE "false" boolean ~ toggle flag (doesn't consume the next arg)
 
-#@flag -p|--port PORT "8080" number ~ validated as numeric
+#@flag -p|--port DEPLOY_PORT "8080" number ~ validated as numeric
 
-#@flag -e|--env ENVIRONMENT "production" enum(dev,staging,prod) ~ validated against allowed values
+#@flag -e|--env DEPLOY_ENVIRONMENT "production" enum(dev,staging,prod) ~ validated against allowed values
 
-#@flag -b|--branch BRANCH "" enum(${_get_branches}) ~ dynamic enum resolved by calling a function
+#@flag -b|--branch DEPLOY_BRANCH "" enum(${_get_branches}) ~ dynamic enum resolved by calling a function
 ```
 
 | Type | Completion | Validation |
@@ -139,7 +139,7 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 | `enum(${func})` | calls `func` at completion time | calls `func` at parse time for validation |
 
 - Short and long forms separated by `|`
-- Variable name must be `UPPER_SNAKE_CASE`
+- Variable name must be `UPPER_SNAKE_CASE`, prefixed with the module name (e.g. `deploy.sh` → `DEPLOY_`)
 - Default value in double quotes (empty string = no default)
 - Optional description after `~` separator (or use `#@description` on the next line)
 - Function declarations work with or without the `function` keyword (`deploy() {` and `function deploy()` are both discovered)
@@ -157,12 +157,12 @@ Flags are parsed from `$@` and exported as environment variables. If a flag isn'
 #import oo.sh
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -v|--verbose VERBOSE "false" boolean ~ enable verbose output
+#@flag -v|--verbose MYMODULE_VERBOSE "false" boolean ~ enable verbose output
 
 #@public ~ deploy the app
-#@flag -e|--env ENVIRONMENT "production" enum(dev,staging,prod) ~ target environment
+#@flag -e|--env MYMODULE_ENVIRONMENT "production" enum(dev,staging,prod) ~ target environment
 function deploy() {
-  echo "Deploying to ${ENVIRONMENT}..."
+  echo "Deploying to ${MYMODULE_ENVIRONMENT}..."
 }
 
 #@protected ~ internal helper
@@ -263,15 +263,16 @@ Sample output:
 
 Colors: green <100ms, yellow 100–150ms, red >150ms. Exit code: 0 if no warnings, 1 if any — CI-friendly.
 
-### 🔎 Validate
+### 🔎 Lint
 
 Catch annotation mistakes before they bite you at runtime:
 
 ```bash
-oosh validate mytool                 # validate all files
-oosh validate mytool hello           # validate only the hello module
-oosh validate ./modules/deploy.sh    # validate a specific file
-oosh validate mytool --no-color      # no ANSI codes (CI-friendly)
+oosh lint mytool                     # lint all files
+oosh lint mytool hello               # lint only the hello module
+oosh lint ./modules/deploy.sh        # lint a specific file
+oosh lint mytool --fix               # auto-fix: add prefixes + placeholder descriptions
+oosh lint mytool --no-color          # no ANSI codes (CI-friendly)
 ```
 
 Sample output:
@@ -282,7 +283,7 @@ Sample output:
   | (_) || (_) | \__ \ | '_ \
    \___/  \___/  |___/ |_| |_|
 
-  oosh validate — mytool
+  oosh lint — mytool
 
   ►  mytool.sh
   ►  hello.sh
@@ -298,7 +299,9 @@ Sample output:
 
 **Errors** (exit 1): malformed `#@flag`, invalid type, orphaned `#@public`/`#@protected`, duplicate flag names in the same scope.
 
-**Warnings** (exit 0): variable name collisions across scopes, env var shadows (`PATH`, `HOME`, etc.), oosh internal shadows (`MODULES_DIR`, etc.), missing descriptions, cross-module variable collisions.
+**Warnings** (exit 0): missing module prefix (variable should start with `HELLO_` in `hello.sh`), variable name collisions across scopes, env var shadows (`PATH`, `HOME`, etc.), oosh internal shadows (`MODULES_DIR`, etc.), missing descriptions, cross-module variable collisions.
+
+**`--fix`** auto-fixes what it can: renames unprefixed variables to use the module prefix (both in annotations and `$VAR` / `${VAR}` usages) and appends `~ TODO` descriptions to flags missing them. Run `oosh lint` again after fixing to verify.
 
 ## 🎨 Colors
 
@@ -342,12 +345,12 @@ oosh is designed to be easy for AI agents to work with. To add functionality to 
 
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -x|--example VAR "default" ~ what this flag does
+#@flag -x|--example NAME_VAR "default" ~ what this flag does
 # types: file, dir, boolean, number, enum(a,b,c), enum(${func})
 
 #@public ~ what this command does
 function mycommand() {
-  echo "doing things with ${VAR}"
+  echo "doing things with ${NAME_VAR}"
 }
 
 main $0 "$@"

@@ -169,19 +169,19 @@ cat > "${OUT_DIR}/modules/hello.sh" <<'MODULE'
 #import oo.sh
 . ${MODULES_DIR}/../oo.sh
 
-#@flag -n|--name NAME "world" ~ who to greet
-#@flag -u|--uppercase UPPERCASE "false" boolean ~ uppercase the greeting
+#@flag -n|--name HELLO_NAME "world" ~ who to greet
+#@flag -u|--uppercase HELLO_UPPERCASE "false" boolean ~ uppercase the greeting
 
 #@public ~ say hello
 function greet() {
-  local msg="Hello, ${NAME}!"
-  [[ "$UPPERCASE" == true ]] && msg="$(echo "$msg" | tr '[:lower:]' '[:upper:]')"
+  local msg="Hello, ${HELLO_NAME}!"
+  [[ "$HELLO_UPPERCASE" == true ]] && msg="$(echo "$msg" | tr '[:lower:]' '[:upper:]')"
   echo "$msg"
 }
 
 #@public ~ say goodbye
 function farewell() {
-  echo "Goodbye, ${NAME}!"
+  echo "Goodbye, ${HELLO_NAME}!"
 }
 
 #@protected ~ internal helper

@@ -49,9 +49,9 @@ printf "  ${CY}↓${RST}  trace.sh\n"
 curl -fsSL "${OOSH_REPO}/trace.sh" -o "${OOSH_HOME}/trace.sh"
 chmod +x "${OOSH_HOME}/trace.sh"
 
-printf "  ${CY}↓${RST}  validate.sh\n"
-curl -fsSL "${OOSH_REPO}/validate.sh" -o "${OOSH_HOME}/validate.sh"
-chmod +x "${OOSH_HOME}/validate.sh"
+printf "  ${CY}↓${RST}  lint.sh\n"
+curl -fsSL "${OOSH_REPO}/lint.sh" -o "${OOSH_HOME}/lint.sh"
+chmod +x "${OOSH_HOME}/lint.sh"
 
 # --- find a writable bin directory ---
 _find_bin_dir() {
@@ -69,7 +69,7 @@ cat > "${OOSH_HOME}/oosh" << EOF
 #!/bin/bash
 case "\${1:-}" in
   trace)    shift; exec bash "${OOSH_HOME}/trace.sh" "\$@" ;;
-  validate) shift; exec bash "${OOSH_HOME}/validate.sh" "\$@" ;;
+  lint) shift; exec bash "${OOSH_HOME}/lint.sh" "\$@" ;;
   *)        exec bash "${OOSH_HOME}/generate.sh" "\$@" ;;
 esac
 EOF
@@ -100,6 +100,6 @@ if [[ "${NEEDS_PATH_UPDATE}" == "1" ]]; then
   printf "    ${B}source ~/.zshrc${RST}  ${DIM}(or ~/.bashrc)${RST}\n\n"
 fi
 
-printf "    ${B}oosh${RST} ${CY}<name>${RST}            ${DIM}generate a new CLI${RST}\n"
-printf "    ${B}oosh trace${RST} ${CY}<name>${RST}      ${DIM}profile tab-completion performance${RST}\n"
-printf "    ${B}oosh validate${RST} ${CY}<name>${RST}   ${DIM}static analysis for annotations${RST}\n\n"
+printf "    ${B}oosh${RST} ${CY}<name>${RST}           ${DIM}generate a new CLI${RST}\n"
+printf "    ${B}oosh trace${RST} ${CY}<name>${RST}     ${DIM}profile tab-completion performance${RST}\n"
+printf "    ${B}oosh lint${RST} ${CY}<name>${RST}      ${DIM}lint annotations and auto-fix with --fix${RST}\n\n"
