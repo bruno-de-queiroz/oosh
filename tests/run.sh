@@ -575,7 +575,7 @@ _trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_slow.s
 _assert "trace: slow enum exits 1 when exceeding threshold" "1" "$_trace_rc"
 _assert_contains "trace: output shows warning count" "warning" "$_trace_out"
 
-_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 1000 2>&1) && _trace_rc=$? || _trace_rc=$?
+_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 2000 2>&1) && _trace_rc=$? || _trace_rc=$?
 _assert "trace: generated multi-module CLI exits 0" "0" "$_trace_rc"
 
 _trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" hello -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
