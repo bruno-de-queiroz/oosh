@@ -284,6 +284,48 @@ _out2=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/fixme.sh" 2>&1) && _r
 _assert "lint: --fix re-lint exits 0" "0" "$_rc2"
 _assert_contains "lint: --fix re-lint clean" "0 errors, 0 warnings" "$_out2"
 
+# --- unescaped quotes warning + fix ---
+cat > "${_FIX_DIR}/badquotes.sh" << 'SCRIPT'
+#!/bin/bash
+SCRIPT
+{
+  printf '#!/bin/bash\n'
+  printf '#@flag -m|--msg MSG "say "hello"" ~ greeting\n'
+  printf '#@public ~ test\n'
+  printf 'function test-it() { echo "ok"; }\n'
+} > "${_FIX_DIR}/badquotes.sh"
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/badquotes.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: unescaped quotes exits 0 (warning)" "0" "$_rc"
+_assert_contains "lint: unescaped quotes detected" "unescaped quotes" "$_out"
+
+# Test --fix escapes the quotes
+cp "${_FIX_DIR}/badquotes.sh" "${_FIX_DIR}/badquotes_fix.sh"
+_out=$(bash "${OOSH_DIR}/lint.sh" --fix --no-color "${_FIX_DIR}/badquotes_fix.sh" 2>&1) && _rc=$? || _rc=$?
+_assert_contains "lint: --fix escapes quotes" "escaped quotes" "$_out"
+_fixed=$(cat "${_FIX_DIR}/badquotes_fix.sh")
+_assert_contains "lint: --fix content has escaped quotes" '\"hello\"' "$_fixed"
+
+# --- flag name too long warning ---
+cat > "${_FIX_DIR}/longflag.sh" << 'SCRIPT'
+#!/bin/bash
+#@flag -v|--very-long-verbose-flag LONGFLAG_VERBOSE "false" boolean ~ too long
+#@public ~ test
+function test-it() { echo "ok"; }
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/longflag.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: long flag name exits 0 (warning)" "0" "$_rc"
+_assert_contains "lint: long flag name warned" "exceeds help column" "$_out"
+
+# Boundary: exactly 20 chars should NOT warn
+cat > "${_FIX_DIR}/okflag.sh" << 'SCRIPT'
+#!/bin/bash
+#@flag -v|--verbose-long OKFLAG_V "false" boolean ~ just right
+#@public ~ test
+function test-it() { echo "ok"; }
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/okflag.sh" 2>&1) && _rc=$? || _rc=$?
+_assert_not_contains "lint: 20-char flag no warning" "exceeds help column" "$_out"
+
 # --- performance ---
 _assert_perf "lint: single file <200ms" 200 bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/deploy.sh"
 _assert_perf "lint: multi-module <500ms" 500 env "_TESTCLI_V_DIR=${_GEN_CLI}" bash "${OOSH_DIR}/lint.sh" --no-color "${_GEN_CLI}/_testcli_v.sh"

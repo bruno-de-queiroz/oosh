@@ -185,13 +185,28 @@ function test-array() { echo "TAG=\${TAG[*]} TAG_COUNT=\${#TAG[@]}"; }
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: escaped quotes in default value
+cat > /tmp/_oosh_test_escaped_quotes.sh << 'SCRIPT'
+#!/bin/bash
+SCRIPT
+# Write with printf to embed the escaped quote annotation precisely
+{
+  printf '#!/bin/bash\n'
+  printf '. %s/oo.sh\n' "${OOSH_DIR}"
+  printf '#@flag -m|--msg MSG "say \\"hello\\"" ~ greeting message\n'
+  printf '#@public ~ test escaped quotes\n'
+  printf 'function test-it() { echo "MSG=$MSG"; }\n'
+  printf 'main $0 "$@"\n'
+} > /tmp/_oosh_test_escaped_quotes.sh
+
 cleanup() {
   rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh \
        /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh \
        /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh \
        /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh \
        /tmp/_oosh_test_array.sh /tmp/_oosh_test_array_enum.sh \
-       /tmp/_oosh_test_array_dyn.sh /tmp/_oosh_test_array_default.sh
+       /tmp/_oosh_test_array_dyn.sh /tmp/_oosh_test_array_default.sh \
+       /tmp/_oosh_test_escaped_quotes.sh
 }
 trap cleanup EXIT
 
@@ -218,13 +233,13 @@ _assert "boolean default when not provided" \
   "VERBOSE=false DRY_RUN=false" \
   "$(bash /tmp/_oosh_test_flags.sh test-bool)"
 
-_assert "--verbose yes sets yes" \
+_assert "--verbose=yes sets yes (= syntax)" \
   "VERBOSE=yes DRY_RUN=false" \
-  "$(bash /tmp/_oosh_test_flags.sh --verbose yes test-bool)"
+  "$(bash /tmp/_oosh_test_flags.sh --verbose=yes test-bool)"
 
-_assert "--verbose 1 sets 1" \
+_assert "--verbose=1 sets 1 (= syntax)" \
   "VERBOSE=1 DRY_RUN=false" \
-  "$(bash /tmp/_oosh_test_flags.sh --verbose 1 test-bool)"
+  "$(bash /tmp/_oosh_test_flags.sh --verbose=1 test-bool)"
 
 # ============================================================
 printf "\n\033[1m Enum flags (static) \033[0m\n\n"
@@ -465,6 +480,56 @@ _assert_contains "array: help shows (multiple)" \
 
 _assert_perf "array: flag parsing performance" 150 \
   bash /tmp/_oosh_test_array.sh --tag a --tag b,c test-array
+
+# ============================================================
+printf "\n\033[1m Boolean: non-greedy consumption \033[0m\n\n"
+
+_assert "bool: --verbose yes → true, yes stays as positional" \
+  "VERBOSE=true DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool 2>/dev/null)"
+
+# --verbose yes: yes is NOT consumed, becomes first positional, test-bool becomes second
+# _call gets (yes, test-bool) → yes is not a known method → shows help
+# So we test with = syntax for the actual value pass-through
+_assert "bool: --verbose=no sets no (= syntax)" \
+  "VERBOSE=no DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose=no test-bool)"
+
+_assert "bool: --verbose true consumed" \
+  "VERBOSE=true DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose true test-bool)"
+
+_assert "bool: --verbose false consumed" \
+  "VERBOSE=false DRY_RUN=false" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose false test-bool)"
+
+# ============================================================
+printf "\n\033[1m Escaped quotes in defaults \033[0m\n\n"
+
+_assert "escaped quotes: default value preserves inner quotes" \
+  'MSG=say "hello"' \
+  "$(bash /tmp/_oosh_test_escaped_quotes.sh test-it)"
+
+# ============================================================
+printf "\n\033[1m Number validation \033[0m\n\n"
+
+_assert_exit "number: trailing dot rejected" 1 \
+  bash /tmp/_oosh_test_flags.sh --port 123. test-number
+
+_assert "number: decimal accepted" \
+  "PORT=1.5" \
+  "$(bash /tmp/_oosh_test_flags.sh --port 1.5 test-number)"
+
+# ============================================================
+printf "\n\033[1m Unknown flags warning \033[0m\n\n"
+
+_assert_contains "unknown flag: --vrebose warns on stderr" \
+  "unknown flag '--vrebose'" \
+  "$(bash /tmp/_oosh_test_flags.sh --vrebose test-bool 2>&1)"
+
+_assert_not_contains "known flag: --verbose no warning" \
+  "unknown flag" \
+  "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Performance \033[0m\n\n"

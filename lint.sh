@@ -77,7 +77,8 @@ _OOSH_INTERNALS=" GLOBAL_SCRIPT GLOBAL_METHODS GLOBAL_FLAGS GLOBAL_PREFIX GLOBAL
 _VALID_BASE_TYPES=" boolean number file dir "
 
 # --- regex patterns (match oo.sh main loop) ---
-_RE_FLAG='^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+"([^"]*)"[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))?'
+_RE_FLAG='^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+"(([^"\\]|\\.)*)"[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))?'
+_RE_FLAG_LOOSE='^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+"(.+)"'
 _RE_ENUM='^enum\([^)]+\)$'
 _RE_ARRAY_TYPED='^array\(.+\)$'
 _RE_ARRAY_PLAIN='^array$'
@@ -106,7 +107,7 @@ _report_warning() {
 }
 
 # --fix: collect fixable actions (newline-delimited)
-# Format: "rename:file:OLD_VAR:NEW_VAR" or "desc:file:LINE_NUM"
+# Format: "rename:file:OLD_VAR:NEW_VAR" or "desc:file:LINE_NUM" or "quote:file:LINE_NUM"
 _FIXES=""
 _add_fix() {
   [[ "$_FIX" == "1" ]] || return 0
@@ -189,9 +190,22 @@ _validate_file() {
         if [[ "$t" =~ $_RE_FLAG ]]; then
           local flag_name="${BASH_REMATCH[1]}"
           local flag_var="${BASH_REMATCH[2]}"
-          local flag_type="${BASH_REMATCH[4]}"
-          local flag_desc="${BASH_REMATCH[6]}"
+          local flag_type="${BASH_REMATCH[5]}"
+          local flag_desc="${BASH_REMATCH[7]}"
+
+          # Detect misparse from unescaped quotes (type field contains ")
+          if [[ "$flag_type" == *'"'* ]]; then
+            _report_warning "$file" "$line_num" "unescaped quotes in default value for ${flag_name}"
+            _add_fix "quote:${file}:${line_num}"
+            prev_flag_var="" prev_flag_fdesc="" prev_flag_line=0
+          else
+
           _TOTAL_FLAGS=$((_TOTAL_FLAGS + 1))
+
+          # Check flag name length (help column is 20 chars wide)
+          if [[ ${#flag_name} -gt 20 ]]; then
+            _report_warning "$file" "$line_num" "flag name '${flag_name}' exceeds help column width (${#flag_name} > 20)"
+          fi
 
           # Check type validity
           if [[ -n "$flag_type" ]] && ! _is_valid_type "$flag_type"; then
@@ -229,6 +243,11 @@ _validate_file() {
           prev_flag_line=$line_num
           prev_flag_var="$flag_var"
           prev_flag_fdesc="$flag_desc"
+          fi  # end unescaped-quotes else
+        elif [[ "$t" =~ $_RE_FLAG_LOOSE ]] && [[ "${BASH_REMATCH[3]}" == *'"'* ]]; then
+          _report_warning "$file" "$line_num" "unescaped quotes in default value for ${BASH_REMATCH[1]}"
+          _add_fix "quote:${file}:${line_num}"
+          prev_flag_var="" prev_flag_fdesc="" prev_flag_line=0
         else
           _report_error "$file" "$line_num" "malformed #@flag — expected: #@flag -x|--name VAR \"default\" [type] [~ desc]"
           prev_flag_var="" prev_flag_fdesc="" prev_flag_line=0
@@ -400,6 +419,20 @@ if [[ "$_FIX" == "1" && -n "$_FIXES" ]]; then
       rm -f "${local_file}.bak"
       printf "  ${OK}  ${GR}fixed${RST} %s — %s → %s\n" "$(basename "$local_file")" "$local_old" "$local_new"
       _FIXED=$((_FIXED + 1))
+    elif [[ "$local_type" == "quote" ]]; then
+      local_file="${_rest%%:*}"; local_line="${_rest#*:}"
+      _raw_line=$(sed -n "${local_line}p" "$local_file")
+      _re_split='^(#@flag[[:space:]]+[^[:space:]]+[[:space:]]+[A-Z_][A-Z0-9_]*[[:space:]]+")(.*)(\"[[:space:]]*.*)'
+      if [[ "$_raw_line" =~ $_re_split ]]; then
+        _qpre="${BASH_REMATCH[1]}"
+        _qdef="${BASH_REMATCH[2]}"
+        _qsuf="${BASH_REMATCH[3]}"
+        _escaped="${_qdef//\"/\\\"}"
+        _fixed_line="${_qpre}${_escaped}${_qsuf}"
+        _OOSH_FIX_LINE="$_fixed_line" awk -v n="$local_line" 'NR==n{print ENVIRON["_OOSH_FIX_LINE"];next}1' "$local_file" > "${local_file}.tmp" && mv "${local_file}.tmp" "$local_file"
+        printf "  ${OK}  ${GR}fixed${RST} %s:%d — escaped quotes in default\n" "$(basename "$local_file")" "$local_line"
+        _FIXED=$((_FIXED + 1))
+      fi
     elif [[ "$local_type" == "desc" ]]; then
       local_file="${_rest%%:*}"; local_line="${_rest#*:}"
       # Append ~ TODO to the #@flag line (before any trailing comment)

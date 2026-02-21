@@ -169,6 +169,8 @@ main() {
   local _re_enum_static='^enum\(([^)]+)\)$'
   local _re_array_typed='^array\((.+)\)$'
   local _re_array_plain='^array$'
+  local _re_quoted='"(([^"\\]|\\.)*)"'
+  local _re_flag='^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+'$_re_quoted'[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))?'
 
   # Flush pending flag: build help string + extract value from args
   _flush_flag() {
@@ -203,7 +205,7 @@ main() {
         local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
         local _consume=false
         [[ "${BASH_REMATCH[2]}" == "=" ]] && _consume=true
-        case "$val" in true|false|1|0|yes|no) _consume=true ;; esac
+        case "$val" in true|false) _consume=true ;; esac
         if [[ "$_consume" == true ]]; then
           [[ -z "$val" ]] && val=true
           printf -v "$p_var" '%s' "$val"; str="${str/${BASH_REMATCH[0]}/}"
@@ -268,7 +270,7 @@ main() {
         [[ ",${_enum_vals}," == *",${_val},"* ]] || _die "invalid value '${_val}' for $p_flag (expected: ${_enum_vals//,/, })"
       fi
       if [[ "$p_ftype" == "number" && -n "$_val" ]]; then
-        [[ "$_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] || _die "invalid value '${_val}' for $p_flag (expected: number)"
+        [[ "$_val" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || _die "invalid value '${_val}' for $p_flag (expected: number)"
       fi
     fi
 
@@ -315,8 +317,8 @@ main() {
         [[ "$t" =~ ~[[:space:]]+(.*) ]] && p_desc="${BASH_REMATCH[1]}" ;;
       '#@flag '*)
         _flush_flag
-        [[ "$t" =~ ^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+\"([^\"]*)\"[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))? ]]
-        p_flag="${BASH_REMATCH[1]}"; p_var="${BASH_REMATCH[2]}"; p_def="${BASH_REMATCH[3]}"; p_ftype="${BASH_REMATCH[4]}"; p_fdesc="${BASH_REMATCH[6]}" ;;
+        [[ "$t" =~ $_re_flag ]]
+        p_flag="${BASH_REMATCH[1]}"; p_var="${BASH_REMATCH[2]}"; p_def="${BASH_REMATCH[3]//\\\"/\"}"; p_ftype="${BASH_REMATCH[5]}"; p_fdesc="${BASH_REMATCH[7]}" ;;
       '#@description '*)
         [[ -n "$p_flag" ]] && p_fdesc="${t#'#@description '}" || p_desc="${t#'#@description '}" ;;
       '#@version '*)
@@ -356,6 +358,16 @@ main() {
   _SL_FILE_FLAGS="$file_flags"
   _SL_DIR_FLAGS="$dir_flags"
   _SL_ENUM="$enum_flags"
+
+  # Warn about unknown flags (all known flags already removed from str)
+  # Skip during tab completion (shortlist passes flag names as positional args)
+  if [[ "$str" != *"${s}shortlist"* ]]; then
+    local _uf_str="$str" _re_uf="${s}(--?[a-zA-Z][^${s}]*)"
+    while [[ "$_uf_str" =~ $_re_uf ]]; do
+      case "${BASH_REMATCH[1]}" in -h|--help|-V|--version) ;; *) printf "warning: unknown flag '%s'\n" "${BASH_REMATCH[1]}" >&2 ;; esac
+      _uf_str="${_uf_str/${BASH_REMATCH[0]}/}"
+    done
+  fi
 
   str="${str#${s}}"
 
