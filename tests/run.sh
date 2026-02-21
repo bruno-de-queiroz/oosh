@@ -226,8 +226,22 @@ function test-it() { echo "ITEM=\$ITEM"; }
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: trace async module (sleep 2 simulating a network call like kubectl)
+cat > /tmp/_oosh_test_trace_async.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+function _slow_network_call() { sleep 2; echo "ns-default"; echo "ns-kube-system"; }
+
+#@public ~ use a namespace
+#@flag -n|--namespace NS "" enum(\${_slow_network_call}) ~ namespace from slow resolver
+function use() { echo "NS=\$NS"; }
+
+main \$0 "\$@"
+SCRIPT
+
 cleanup() {
-  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh /tmp/_oosh_test_trace_slow.sh
+  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh /tmp/_oosh_test_trace_slow.sh /tmp/_oosh_test_trace_async.sh
   rm -rf /tmp/_oosh_gen_test
 }
 trap cleanup EXIT
@@ -561,7 +575,7 @@ _trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_slow.s
 _assert "trace: slow enum exits 1 when exceeding threshold" "1" "$_trace_rc"
 _assert_contains "trace: output shows warning count" "warning" "$_trace_out"
 
-_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 200 2>&1) && _trace_rc=$? || _trace_rc=$?
+_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 500 2>&1) && _trace_rc=$? || _trace_rc=$?
 _assert "trace: generated multi-module CLI exits 0" "0" "$_trace_rc"
 
 _trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" hello -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
@@ -571,6 +585,15 @@ _assert_not_contains "trace: scoped to hello excludes install" "shortlist instal
 _trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" hello greet -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
 _assert_contains "trace: scoped to greet shows greet" "shortlist hello greet" "$_trace_out"
 _assert_not_contains "trace: scoped to greet excludes farewell" "shortlist hello farewell" "$_trace_out"
+
+# Async resolver: sleep 2 simulates a slow network call (e.g. kubectl get namespaces)
+# The trace must report >2000ms for the flag that triggers it, proving cold timing is captured
+_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_async.sh -t 50 -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert "trace: async 2s resolver exits 1" "1" "$_trace_rc"
+# Extract the ms value for --namespace line (first match only, first ms number)
+_ns_ms=$(echo "$_trace_out" | grep -- '--namespace' | head -1 | sed 's/.*[[:space:]]\([0-9][0-9]*\)ms.*/\1/')
+_ns_ok=0; [[ -n "$_ns_ms" && "$_ns_ms" -ge 1500 ]] && _ns_ok=1
+_assert "trace: async 2s resolver reports >=1500ms (got ${_ns_ms:-?}ms)" "1" "$_ns_ok"
 
 # ============================================================
 printf "\n\033[1m Results \033[0m\n\n"

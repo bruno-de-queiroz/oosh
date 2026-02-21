@@ -148,7 +148,22 @@ _SCOPE_LABEL=""
 [[ -n "$SCOPE_CMD" ]] && _SCOPE_LABEL="$_SCOPE_LABEL $SCOPE_CMD"
 
 # --- helpers ---
+_WORDS_TMP="${TMPDIR:-/tmp}/_oosh_trace_$$"
+trap 'rm -f "$_WORDS_TMP"' EXIT
+
 _get_words() { _run shortlist "$@" 2>/dev/null | tr ' ' '\n' | grep -v '^$' || true; }
+
+# Like _get_words but times the call and sets _PREMEASURED_MS for the next _trace.
+# Output goes to $_WORDS_TMP (can't set globals from a subshell).
+_timed_get_words() {
+  local _t0 _t1
+  _t0=$(_ms)
+  _run shortlist "$@" > "$_WORDS_TMP" 2>/dev/null || true
+  _t1=$(_ms)
+  _PREMEASURED_MS=$((_t1 - _t0 - _MS_OVERHEAD))
+  if [[ $_PREMEASURED_MS -lt 0 ]]; then _PREMEASURED_MS=0; fi
+}
+_read_words() { tr ' ' '\n' < "$_WORDS_TMP" | grep -v '^$' || true; }
 
 _trace_flags() {
   local items="$1"; shift
@@ -190,10 +205,12 @@ _trace_flags() {
 # --- crawl: Shortlist ---
 printf "\n  ${B}Shortlist${RST}\n\n"
 
-# Get items at scope level
-_top_items=$(_get_words ${_SCOPE_LABEL})
+# Get items at scope level (timed — first run feeds into _trace)
+# shellcheck disable=SC2086
+_timed_get_words ${_SCOPE_LABEL}
+_top_items=$(_read_words)
 
-# Trace the scope-level shortlist
+# Trace the scope-level shortlist (uses pre-measured first run)
 # shellcheck disable=SC2086
 _trace "shortlist${_SCOPE_LABEL}" shortlist ${_SCOPE_LABEL}
 
@@ -220,11 +237,12 @@ else
       break
     fi
 
-    # Get sub-items before tracing
+    # Get sub-items (timed — first run feeds into _trace)
     # shellcheck disable=SC2086
-    _sub_items=$(_get_words ${_SCOPE_LABEL} "$_cmd")
+    _timed_get_words ${_SCOPE_LABEL} "$_cmd"
+    _sub_items=$(_read_words)
 
-    # Trace: shortlist [scope] <cmd>
+    # Trace: shortlist [scope] <cmd> (uses pre-measured first run)
     # shellcheck disable=SC2086
     _trace "shortlist${_SCOPE_LABEL} $_cmd" shortlist ${_SCOPE_LABEL} "$_cmd"
 
@@ -244,7 +262,8 @@ else
       [[ -z "$_subcmd" ]] && continue
       [[ $_sub_count -ge $MAX_ITEMS ]] && break
       # shellcheck disable=SC2086
-      _subsub_items=$(_get_words ${_SCOPE_LABEL} "$_cmd" "$_subcmd")
+      _timed_get_words ${_SCOPE_LABEL} "$_cmd" "$_subcmd"
+      _subsub_items=$(_read_words)
       # shellcheck disable=SC2086
       _trace "shortlist${_SCOPE_LABEL} $_cmd $_subcmd" shortlist ${_SCOPE_LABEL} "$_cmd" "$_subcmd"
       # shellcheck disable=SC2086
