@@ -93,11 +93,13 @@ if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
 fi
 
 # --- done ---
-printf "\n  ${GR}${B}Done!${RST} ${DIM}Generate your first CLI:${RST}\n\n"
+printf "\n  ${GR}${B}Done!${RST} ${DIM}Get started:${RST}\n\n"
 
 if [[ "${NEEDS_PATH_UPDATE}" == "1" ]]; then
   printf "  Reload your shell first:\n"
   printf "    ${B}source ~/.zshrc${RST}  ${DIM}(or ~/.bashrc)${RST}\n\n"
 fi
 
-printf "    ${B}oosh${RST} ${CY}<name>${RST}\n\n"
+printf "    ${B}oosh${RST} ${CY}<name>${RST}            ${DIM}generate a new CLI${RST}\n"
+printf "    ${B}oosh trace${RST} ${CY}<name>${RST}      ${DIM}profile tab-completion performance${RST}\n"
+printf "    ${B}oosh validate${RST} ${CY}<name>${RST}   ${DIM}static analysis for annotations${RST}\n\n"

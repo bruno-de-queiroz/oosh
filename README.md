@@ -263,6 +263,43 @@ Sample output:
 
 Colors: green <100ms, yellow 100–150ms, red >150ms. Exit code: 0 if no warnings, 1 if any — CI-friendly.
 
+### 🔎 Validate
+
+Catch annotation mistakes before they bite you at runtime:
+
+```bash
+oosh validate mytool                 # validate all files
+oosh validate mytool hello           # validate only the hello module
+oosh validate ./modules/deploy.sh    # validate a specific file
+oosh validate mytool --no-color      # no ANSI codes (CI-friendly)
+```
+
+Sample output:
+
+```
+    ___    ___    ___   _
+   / _ \  / _ \  / __| | |__
+  | (_) || (_) | \__ \ | '_ \
+   \___/  \___/  |___/ |_| |_|
+
+  oosh validate — mytool
+
+  ►  mytool.sh
+  ►  hello.sh
+  ►  deploy.sh
+  ✘  error deploy.sh:5 — malformed #@flag — expected: #@flag -x|--name VAR "default" [type] [~ desc]
+  ✘  error deploy.sh:8 — invalid type 'string' for -t|--target
+  ⚠  warn  deploy.sh:12 — PATH shadows environment variable
+  ⚠  warn  deploy.sh:15 — flag TIMEOUT has no description
+
+  3 command(s), 8 flag(s) across 3 file(s)
+  2 errors, 2 warnings
+```
+
+**Errors** (exit 1): malformed `#@flag`, invalid type, orphaned `#@public`/`#@protected`, duplicate flag names in the same scope.
+
+**Warnings** (exit 0): variable name collisions across scopes, env var shadows (`PATH`, `HOME`, etc.), oosh internal shadows (`MODULES_DIR`, etc.), missing descriptions, cross-module variable collisions.
+
 ## 🎨 Colors
 
 Output is colored by default because life's too short for monochrome terminals. Three ways to tame it:
