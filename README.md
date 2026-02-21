@@ -23,6 +23,8 @@ mytool install
 
 Drop more `.sh` files into `modules/` and they're auto-discovered. That's it. Go build something cool. 🔧
 
+[Annotations](#-annotations-reference) · [Flags](#-flag-syntax) · [Modules](#-module-structure) · [Customizing](#-customizing) · [Autocompletion](#-autocompletion) · [Colors](#-colors) · [Generator](#-generator) · [Agent-friendly](#-agent-friendly) · [Limitations](#-known-limitations) · [Cheatsheet](#-cheatsheet) · [Performance](#-performance)
+
 ### 🎬 What the generator looks like
 
 ```
