@@ -9,7 +9,7 @@
 # Function discovery, flag parsing, help and autocompletion.
 #
 # Annotations:  #@public  #@protected  #@flag  #@description  #@module  #@version
-# Flag syntax:  #@flag -e|--env VARNAME "default" [file|dir|boolean|number|enum(...)] [~ description]
+# Flag syntax:  #@flag -e|--env VARNAME "default" [file|dir|boolean|number|enum(...)|array|array(enum(...))] [~ description]
 #
 # Usage:
 #   source oo.sh
@@ -162,26 +162,37 @@ main() {
   local flags="" methods="" file_flags="" dir_flags="" enum_flags="" version=""
   local p_vis="" p_desc="" p_flag="" p_var="" p_def="" p_fdesc="" p_ftype=""
   local mf_help="" mf_file="" mf_dir="" mf_enum=""
+  local _oo_array_vars=""
 
   # Regex patterns stored in variables for bash 3.2 compatibility
   local _re_enum_dyn='^enum\(\$\{([^}]+)\}\)$'
   local _re_enum_static='^enum\(([^)]+)\)$'
+  local _re_array_typed='^array\((.+)\)$'
+  local _re_array_plain='^array$'
 
   # Flush pending flag: build help string + extract value from args
   _flush_flag() {
     [[ -z "$p_flag" ]] && return
+    # Detect array wrapper, then extract inner type
+    local _is_array=false _effective_type="$p_ftype"
+    if [[ "$p_ftype" =~ $_re_array_typed ]]; then
+      _is_array=true; _effective_type="${BASH_REMATCH[1]}"
+    elif [[ "$p_ftype" =~ $_re_array_plain ]]; then
+      _is_array=true; _effective_type=""
+    fi
     # Parse enum — static enum(a,b,c) or dynamic enum(${funcname})
     local _enum_vals="" _enum_dynamic="" _enum_store=""
-    if [[ "$p_ftype" =~ $_re_enum_dyn ]]; then
+    if [[ "$_effective_type" =~ $_re_enum_dyn ]]; then
       _enum_dynamic="${BASH_REMATCH[1]}"
       _enum_store='${'"${_enum_dynamic}"'}'
-    elif [[ "$p_ftype" =~ $_re_enum_static ]]; then
+    elif [[ "$_effective_type" =~ $_re_enum_static ]]; then
       _enum_vals="${BASH_REMATCH[1]}"
       _enum_store="$_enum_vals"
     fi
     # Build help line (append enum values to description for static enums)
     local help_desc="$p_fdesc"
     [[ -n "$_enum_vals" ]] && help_desc+=" [${_enum_vals//,/, }]"
+    [[ "$_is_array" == true ]] && help_desc+=" (multiple)"
     local help_line=$(printf "%-20s %s" "$p_flag" "$help_desc")
     local _short="${p_flag%%|*}" _long="${p_flag#*|}"
 
@@ -206,6 +217,27 @@ main() {
       else
         [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
       fi
+    elif [[ "$_is_array" == true ]]; then
+      local _arr_vals="" _arr_sep=$'\x1E'
+      while [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; do
+        local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
+        str="${str/${BASH_REMATCH[0]}/}"
+        val="${val//,/$_arr_sep}"
+        [[ -z "$val" ]] && { _was_set=true; continue; }
+        [[ -n "$_arr_vals" ]] && _arr_vals+="$_arr_sep"
+        _arr_vals+="$val"
+        _was_set=true
+      done
+      if [[ "$_was_set" == true ]]; then
+        export "$p_var=$_arr_vals"
+      elif [[ -z "${!p_var}" ]]; then
+        if [[ -n "$p_def" ]]; then
+          export "$p_var=${p_def//,/$_arr_sep}"
+        else
+          export "$p_var="
+        fi
+      fi
+      _oo_array_vars+="$p_var "
     elif [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
       local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
       export "$p_var=$val"; str="${str/${BASH_REMATCH[0]}/}"
@@ -216,19 +248,40 @@ main() {
 
     # --- Validation (dynamic enums resolved lazily, only when flag was set) ---
     local _val="${!p_var}"
-    if [[ -n "$_enum_dynamic" && "$_was_set" == true && -n "$_val" ]]; then
-      _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
-      _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
-    fi
-    if [[ -n "$_enum_vals" && -n "$_val" ]]; then
-      [[ ",${_enum_vals}," == *",${_val},"* ]] || _die "invalid value '${_val}' for $p_flag (expected: ${_enum_vals//,/, })"
-    fi
-    if [[ "$p_ftype" == "number" && -n "$_val" ]]; then
-      [[ "$_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] || _die "invalid value '${_val}' for $p_flag (expected: number)"
+    if [[ "$_is_array" == true ]]; then
+      if [[ -n "$_enum_dynamic" && "$_was_set" == true && -n "$_val" ]]; then
+        _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
+        _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
+      fi
+      if [[ -n "$_enum_vals" && -n "$_val" ]]; then
+        local _old_ifs="$IFS"; IFS=$'\x1E'; local _elems=($_val); IFS="$_old_ifs"
+        local _elem; for _elem in "${_elems[@]}"; do
+          [[ ",${_enum_vals}," == *",${_elem},"* ]] || _die "invalid value '${_elem}' for $p_flag (expected: ${_enum_vals//,/, })"
+        done
+      fi
+    else
+      if [[ -n "$_enum_dynamic" && "$_was_set" == true && -n "$_val" ]]; then
+        _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
+        _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
+      fi
+      if [[ -n "$_enum_vals" && -n "$_val" ]]; then
+        [[ ",${_enum_vals}," == *",${_val},"* ]] || _die "invalid value '${_val}' for $p_flag (expected: ${_enum_vals//,/, })"
+      fi
+      if [[ "$p_ftype" == "number" && -n "$_val" ]]; then
+        [[ "$_val" =~ ^-?[0-9]+\.?[0-9]*$ ]] || _die "invalid value '${_val}' for $p_flag (expected: number)"
+      fi
     fi
 
     # --- Store help + completion info ---
-    local _ftype="$p_ftype"; [[ "$_ftype" == enum* ]] && _ftype=enum
+    local _ftype="$p_ftype"
+    if [[ "$_ftype" =~ ^array\( ]]; then
+      local _inner="${_ftype#array(}"; _inner="${_inner%)}"
+      [[ "$_inner" == enum* ]] && _ftype=enum || _ftype=""
+    elif [[ "$_ftype" == array ]]; then
+      _ftype=""
+    elif [[ "$_ftype" == enum* ]]; then
+      _ftype=enum
+    fi
     if [[ -n "$p_vis" ]]; then
       [[ -n "$mf_help" ]] && mf_help+=$'\n'; mf_help+="$help_line"
       case "$_ftype" in
@@ -305,6 +358,16 @@ main() {
   _SL_ENUM="$enum_flags"
 
   str="${str#${s}}"
+
+  local _av; for _av in $_oo_array_vars; do
+    local _raw="${!_av}"
+    if [[ -n "$_raw" ]]; then
+      local _old_ifs="$IFS"; IFS=$'\x1E'; eval "$_av=(\$_raw)"; IFS="$_old_ifs"
+    else
+      eval "$_av=()"
+    fi
+  done
+
   local old_ifs="$IFS"; IFS="$s"; local all=($str); IFS="$old_ifs"
   _call "${all[@]}"
 }
