@@ -186,6 +186,7 @@ _trace_flags() {
     _pre_t1=$(_ms)
     _pre_elapsed=$((_pre_t1 - _pre_t0 - _MS_OVERHEAD))
     [[ $_pre_elapsed -lt 0 ]] && _pre_elapsed=0
+    local _reported=false
     if [[ -n "$output" && "$output" != "__file__" && "$output" != "__dir__" ]]; then
       # Skip if output is only flags (boolean consumed, parent listing echoed)
       _is_completion=false
@@ -196,7 +197,15 @@ _trace_flags() {
         # Pass the pre-measured cold timing as the first run
         _PREMEASURED_MS=$_pre_elapsed
         _trace "$label_prefix $flag" shortlist "$@" "$flag"
+        _reported=true
       fi
+    fi
+    # Report slow pre-checks even when they produced no completions
+    if [[ "$_reported" == false && $_pre_elapsed -gt $THRESHOLD ]]; then
+      local _fc="$RD" _fi="$ERR"
+      [[ "$_pre_elapsed" -gt "$_SLOWEST_MS" ]] && { _SLOWEST_MS="$_pre_elapsed"; _SLOWEST="$label_prefix $flag"; }
+      _WARNINGS=$((_WARNINGS + 1))
+      printf "  %s  %-40s ${_fc}%dms${RST} ${DIM}(no completions)${RST}\n" "$_fi" "$label_prefix $flag" "$_pre_elapsed"
     fi
     count=$((count + 1))
   done <<< "$to_trace"

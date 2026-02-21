@@ -240,8 +240,22 @@ function use() { echo "NS=\$NS"; }
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: trace slow empty resolver (simulates kubectl returning nothing)
+cat > /tmp/_oosh_test_trace_empty.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+function _slow_empty_resolver() { sleep 0.3; }
+
+#@public ~ do something
+#@flag -n|--name NAME "" enum(\${_slow_empty_resolver}) ~ name from slow empty resolver
+function test-it() { echo "NAME=\$NAME"; }
+
+main \$0 "\$@"
+SCRIPT
+
 cleanup() {
-  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh /tmp/_oosh_test_trace_slow.sh /tmp/_oosh_test_trace_async.sh
+  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh /tmp/_oosh_test_trace_slow.sh /tmp/_oosh_test_trace_async.sh /tmp/_oosh_test_trace_empty.sh
   rm -rf /tmp/_oosh_gen_test
 }
 trap cleanup EXIT
@@ -601,6 +615,14 @@ _assert_contains "trace: command-scoped shows --namespace flag" "shortlist use -
 _ns_scoped_ms=$(echo "$_trace_out" | grep -- '--namespace' | head -1 | sed 's/.*[[:space:]]\([0-9][0-9]*\)ms.*/\1/')
 _ns_scoped_ok=0; [[ -n "$_ns_scoped_ms" && "$_ns_scoped_ms" -ge 1500 ]] && _ns_scoped_ok=1
 _assert "trace: command-scoped async reports >=1500ms (got ${_ns_scoped_ms:-?}ms)" "1" "$_ns_scoped_ok"
+
+# Slow resolver returning empty output: trace must still surface the timing
+_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_empty.sh -t 50 -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert "trace: slow empty resolver exits 1" "1" "$_trace_rc"
+_assert_contains "trace: slow empty resolver shows no completions" "no completions" "$_trace_out"
+_empty_ms=$(echo "$_trace_out" | grep -- '--name' | head -1 | sed 's/.*[[:space:]]\([0-9][0-9]*\)ms.*/\1/')
+_empty_ok=0; [[ -n "$_empty_ms" && "$_empty_ms" -ge 200 ]] && _empty_ok=1
+_assert "trace: slow empty resolver reports >=200ms (got ${_empty_ms:-?}ms)" "1" "$_empty_ok"
 
 # ============================================================
 printf "\n\033[1m Results \033[0m\n\n"
