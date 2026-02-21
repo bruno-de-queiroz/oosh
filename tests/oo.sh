@@ -207,8 +207,9 @@ cat > /tmp/_oosh_test_required.sh << SCRIPT
 #@flag -p|--port PORT "" required:number ~ server port
 #@flag -n|--name NAME "\${TEST_OOSH_NAME}" ~ name with env fallback
 #@flag -e|--env ENV "\${TEST_OOSH_ENV}" required ~ required with env fallback
+#@flag -l|--lang LANG_CODE "\${TEST_OOSH_LANG:-en}" ~ env var with inline fallback
 #@public ~ test required flags
-function test-it() { echo "KEY=\$KEY PORT=\$PORT NAME=\$NAME ENV=\$ENV"; }
+function test-it() { echo "KEY=\$KEY PORT=\$PORT NAME=\$NAME ENV=\$ENV LANG_CODE=\$LANG_CODE"; }
 main \$0 "\$@"
 SCRIPT
 
@@ -555,7 +556,7 @@ _assert_contains "required: error lists missing flags" \
   "$(bash /tmp/_oosh_test_required.sh test-it 2>&1)"
 
 _assert "required: provided flags accepted" \
-  "KEY=secret PORT=3000 NAME= ENV=prod" \
+  "KEY=secret PORT=3000 NAME= ENV=prod LANG_CODE=en" \
   "$(bash /tmp/_oosh_test_required.sh --key secret --port 3000 --env prod test-it)"
 
 _assert_exit "required:number invalid value exits 1" 1 \
@@ -573,7 +574,7 @@ _assert_contains "required: help shows (required)" "(required)" "$_out"
 printf "\n\033[1m Env var fallback \033[0m\n\n"
 
 _assert "env: fallback expands env var" \
-  "KEY=x PORT=80 NAME=alice ENV=prod" \
+  "KEY=x PORT=80 NAME=alice ENV=prod LANG_CODE=en" \
   "$(TEST_OOSH_NAME=alice bash /tmp/_oosh_test_required.sh --key x --port 80 --env prod test-it)"
 
 _assert_contains "env: help shows [env: VAR]" \
@@ -581,11 +582,27 @@ _assert_contains "env: help shows [env: VAR]" \
   "$(bash /tmp/_oosh_test_required.sh help 2>&1)"
 
 _assert "env: required + env var satisfies requirement" \
-  "KEY=x PORT=80 NAME= ENV=staging" \
+  "KEY=x PORT=80 NAME= ENV=staging LANG_CODE=en" \
   "$(TEST_OOSH_ENV=staging bash /tmp/_oosh_test_required.sh --key x --port 80 test-it)"
 
 _assert_exit "env: required + env unset + no flag exits 1" 1 \
   bash /tmp/_oosh_test_required.sh --key x --port 80 test-it
+
+_assert "env: \${VAR:-fallback} uses fallback when unset" \
+  "KEY=x PORT=80 NAME= ENV=prod LANG_CODE=en" \
+  "$(bash /tmp/_oosh_test_required.sh --key x --port 80 --env prod test-it)"
+
+_assert "env: \${VAR:-fallback} uses env var when set" \
+  "KEY=x PORT=80 NAME= ENV=prod LANG_CODE=pt" \
+  "$(TEST_OOSH_LANG=pt bash /tmp/_oosh_test_required.sh --key x --port 80 --env prod test-it)"
+
+_assert "env: \${VAR:-fallback} flag overrides both" \
+  "KEY=x PORT=80 NAME= ENV=prod LANG_CODE=fr" \
+  "$(TEST_OOSH_LANG=pt bash /tmp/_oosh_test_required.sh --key x --port 80 --env prod --lang fr test-it)"
+
+_assert_contains "env: \${VAR:-fallback} shows [env: VAR] in help" \
+  "[env: TEST_OOSH_LANG]" \
+  "$(bash /tmp/_oosh_test_required.sh help 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Performance \033[0m\n\n"

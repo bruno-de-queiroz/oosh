@@ -126,6 +126,16 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 #@flag -e|--env DEPLOY_ENVIRONMENT "production" enum(dev,staging,prod) ~ validated against allowed values
 
 #@flag -b|--branch DEPLOY_BRANCH "" enum(${_get_branches}) ~ dynamic enum resolved by calling a function
+
+#@flag -k|--key DEPLOY_API_KEY "" required ~ must be provided (errors before dispatch if missing)
+
+#@flag -p|--port DEPLOY_PORT "" required:number ~ required + type validation combined
+
+#@flag -t|--token DEPLOY_TOKEN "${DEPLOY_TOKEN}" ~ uses env var as fallback, shown in help as [env: DEPLOY_TOKEN]
+
+#@flag -l|--lang DEPLOY_LANG "${DEPLOY_LANG:-en}" ~ env var with inline fallback (uses "en" if env var is unset)
+
+#@flag -s|--secret DEPLOY_SECRET "${DEPLOY_SECRET}" required ~ required with env var fallback (satisfied if either is provided)
 ```
 
 | Type | Completion | Validation |
@@ -133,18 +143,34 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 | *(none)* | -- | -- |
 | `file` | file completion | -- |
 | `dir` | directory completion | -- |
-| `boolean` | -- | toggle: `--flag` sets `true`, only consumes `true/false/1/0/yes/no` |
-| `number` | -- | must be numeric |
+| `boolean` | -- | toggle: `--flag` sets `true`, only consumes `true`/`false` as next arg |
+| `number` | -- | must be numeric (integers or decimals) |
 | `enum(a,b,c)` | completes with listed values | must match one of the listed values |
 | `enum(${func})` | calls `func` at completion time | calls `func` at parse time for validation |
+| `required` | -- | errors before dispatch if not provided and value is empty |
+| `required:type` | inherits from type | required + type validation (e.g. `required:number`, `required:enum(a,b)`) |
 
 - Short and long forms separated by `|`
 - Variable name must be `UPPER_SNAKE_CASE`, prefixed with the module name (e.g. `deploy.sh` → `DEPLOY_`)
-- Default value in double quotes (empty string = no default)
+- Default value in double quotes (empty string = no default). Escaped quotes supported: `"say \"hello\""`
 - Optional description after `~` separator (or use `#@description` on the next line)
 - Function declarations work with or without the `function` keyword (`deploy() {` and `function deploy()` are both discovered)
+- Unknown flags produce a warning on stderr (e.g. `warning: unknown flag '--vrebose'`)
 
-Flags are parsed from `$@` and exported as environment variables. If a flag isn't provided and the variable is unset, the default kicks in.
+Flags are parsed from `$@` and set as shell variables. If a flag isn't provided and the variable is unset, the default kicks in.
+
+**Required flags**: Add `required` as the type (or prefix with `required:` for compound types like `required:number`). If the flag isn't provided and the value is empty after defaults, the CLI errors before dispatch. Help/shortlist/version commands always work without required flags. Help output shows `(required)` next to the flag.
+
+**Env var fallback**: Use `"${VAR_NAME}"` as the default value to read from an environment variable. If the env var is set, its value becomes the default; if not, the default is empty. Use `"${VAR_NAME:-fallback}"` to provide an inline fallback when the env var is unset. Help output shows `[env: VAR_NAME]` so users know the fallback exists.
+
+```bash
+#@flag -k|--key API_KEY "${API_KEY}" required ~ must provide via flag or env
+#@flag -l|--lang LANG "${LANG:-en}" ~ reads $LANG, falls back to "en"
+```
+
+Help output: `-k|--key             must provide via flag or env (required) [env: API_KEY]`
+
+Priority: explicit flag > env var > inline fallback > empty
 
 **Method-scoped flags**: Flags declared after `#@public`/`#@protected` (but before the `function` line) belong to that method. They're shown indented under the command in help output and only appear in tab-completion when that command is selected.
 

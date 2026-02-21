@@ -171,7 +171,7 @@ main() {
   local _re_array_typed='^array\((.+)\)$'
   local _re_array_plain='^array$'
   local _re_quoted='"(([^"\\]|\\.)*)"'
-  local _re_env='^\$\{([A-Z_][A-Z0-9_]*)\}$'
+  local _re_env='^\$\{([A-Z_][A-Z0-9_]*)(:-([^}]+))?\}$'
   local _re_flag='^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+'$_re_quoted'[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))?'
 
   # Flush pending flag: build help string + extract value from args
@@ -183,11 +183,18 @@ main() {
       required:*) _required=true; p_ftype="${p_ftype#required:}" ;;
       required)   _required=true; p_ftype="" ;;
     esac
-    # Detect env var fallback in default (e.g. "${API_KEY}")
+    # Detect env var fallback in default (e.g. "${API_KEY}" or "${API_KEY:-fallback}")
     local _env_hint=""
     if [[ "$p_def" =~ $_re_env ]]; then
       _env_hint="${BASH_REMATCH[1]}"
-      p_def="${!_env_hint:-}"
+      local _env_fb="${BASH_REMATCH[3]}"
+      if [[ -n "${!_env_hint:-}" ]]; then
+        p_def="${!_env_hint}"
+      elif [[ -n "$_env_fb" ]]; then
+        p_def="$_env_fb"
+      else
+        p_def=""
+      fi
     fi
     # Detect array wrapper, then extract inner type
     local _is_array=false _effective_type="$p_ftype"
