@@ -49,6 +49,10 @@ printf "  ${CY}↓${RST}  trace.sh\n"
 curl -fsSL "${OOSH_REPO}/trace.sh" -o "${OOSH_HOME}/trace.sh"
 chmod +x "${OOSH_HOME}/trace.sh"
 
+printf "  ${CY}↓${RST}  validate.sh\n"
+curl -fsSL "${OOSH_REPO}/validate.sh" -o "${OOSH_HOME}/validate.sh"
+chmod +x "${OOSH_HOME}/validate.sh"
+
 # --- find a writable bin directory ---
 _find_bin_dir() {
   local d
@@ -64,8 +68,9 @@ mkdir -p "${BIN_DIR}"
 cat > "${OOSH_HOME}/oosh" << EOF
 #!/bin/bash
 case "\${1:-}" in
-  trace) shift; exec bash "${OOSH_HOME}/trace.sh" "\$@" ;;
-  *)     exec bash "${OOSH_HOME}/generate.sh" "\$@" ;;
+  trace)    shift; exec bash "${OOSH_HOME}/trace.sh" "\$@" ;;
+  validate) shift; exec bash "${OOSH_HOME}/validate.sh" "\$@" ;;
+  *)        exec bash "${OOSH_HOME}/generate.sh" "\$@" ;;
 esac
 EOF
 chmod +x "${OOSH_HOME}/oosh"
