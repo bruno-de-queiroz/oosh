@@ -45,6 +45,10 @@ printf "  ${CY}↓${RST}  generate.sh\n"
 curl -fsSL "${OOSH_REPO}/generate.sh" -o "${OOSH_HOME}/generate.sh"
 chmod +x "${OOSH_HOME}/generate.sh"
 
+printf "  ${CY}↓${RST}  trace.sh\n"
+curl -fsSL "${OOSH_REPO}/trace.sh" -o "${OOSH_HOME}/trace.sh"
+chmod +x "${OOSH_HOME}/trace.sh"
+
 # --- find a writable bin directory ---
 _find_bin_dir() {
   local d
@@ -57,7 +61,15 @@ _find_bin_dir() {
 BIN_DIR=$(_find_bin_dir)
 mkdir -p "${BIN_DIR}"
 
-ln -sf "${OOSH_HOME}/generate.sh" "${BIN_DIR}/oosh"
+cat > "${OOSH_HOME}/oosh" << EOF
+#!/bin/bash
+case "\${1:-}" in
+  trace) shift; exec bash "${OOSH_HOME}/trace.sh" "\$@" ;;
+  *)     exec bash "${OOSH_HOME}/generate.sh" "\$@" ;;
+esac
+EOF
+chmod +x "${OOSH_HOME}/oosh"
+ln -sf "${OOSH_HOME}/oosh" "${BIN_DIR}/oosh"
 printf "  ${OK}  ${B}oosh${RST} ${DIM}→ ${BIN_DIR}/oosh${RST}\n"
 
 # --- update shell profiles if using ~/.local/bin ---

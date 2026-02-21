@@ -225,6 +225,44 @@ oosh mytool
 
 If the directory already exists and contains `oo.sh`, the generator will offer to update it in place -- your modules and configuration are left untouched.
 
+### 🔍 Trace
+
+Profile tab-completion paths to find slow resolvers (e.g. dynamic enums calling `kubectl`):
+
+```bash
+oosh trace mytool                    # trace everything
+oosh trace mytool kube               # trace only the kube module
+oosh trace mytool kube use           # trace only "use" command in kube
+oosh trace ./modules/kube.sh         # trace a specific module file
+oosh trace mytool -t 50              # custom threshold (default 100ms)
+oosh trace mytool -r 10              # custom runs (default 5)
+```
+
+Sample output:
+
+```
+    ___    ___    ___   _
+   / _ \  / _ \  / __| | |__
+  | (_) || (_) | \__ \ | '_ \
+   \___/  \___/  |___/ |_| |_|
+
+  oosh trace — mytool (5 runs, threshold: 100ms)
+
+  Shortlist
+  ✔  shortlist                                  15ms
+  ✔  shortlist hello                            14ms
+  ✔  shortlist hello greet                      18ms
+  ✔  shortlist hello greet --name               12ms
+  ✘  shortlist kube deploy --namespace        5204ms
+
+  Help
+  ✔  help                                       45ms
+
+  1 warning — slowest: shortlist kube deploy --namespace (5204ms)
+```
+
+Colors: green ≤50ms, yellow 51–threshold, red >threshold. Exit code: 0 if no warnings, 1 if any — CI-friendly.
+
 ## 🎨 Colors
 
 Output is colored by default because life's too short for monochrome terminals. Three ways to tame it:

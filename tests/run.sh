@@ -32,6 +32,19 @@ _assert_contains() {
   fi
 }
 
+_assert_not_contains() {
+  local name="$1" needle="$2" haystack="$3"
+  if [[ "$haystack" != *"$needle"* ]]; then
+    printf "  \033[32m✔\033[0m  %s\n" "$name"
+    PASS=$((PASS + 1))
+  else
+    printf "  \033[31m✘\033[0m  %s\n" "$name"
+    printf "      expected NOT to contain: %s\n" "$needle"
+    FAIL=$((FAIL + 1))
+    ERRORS+="  - $name"$'\n'
+  fi
+}
+
 _assert_exit() {
   local name="$1" expected_exit="$2"; shift 2
   local out
@@ -198,8 +211,23 @@ case "$1" in
 esac
 SCRIPT
 
+# Fixture: trace-specific slow module (sleep 0.2 for faster test runs)
+cat > /tmp/_oosh_test_trace_slow.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+
+function _slow_resolver() { sleep 0.2; echo "a"; echo "b"; }
+
+#@flag -x|--item ITEM "" enum(\${_slow_resolver}) ~ slow resolved enum
+
+#@public ~ test
+function test-it() { echo "ITEM=\$ITEM"; }
+
+main \$0 "\$@"
+SCRIPT
+
 cleanup() {
-  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh
+  rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh /tmp/_oosh_test_versioned.sh /tmp/_oosh_test_unversioned.sh /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh /tmp/_oosh_test_trace_slow.sh
   rm -rf /tmp/_oosh_gen_test
 }
 trap cleanup EXIT
@@ -519,6 +547,30 @@ _assert_perf "generated module: shortlist" 150 \
 
 _assert_perf "generated module: help" 150 \
   env _TESTCLI_DIR="${_GEN_CLI}" MODULES_DIR="${_GEN_CLI}/modules" bash "${_GEN_CLI}/modules/hello.sh" help
+
+# ============================================================
+printf "\n\033[1m Trace \033[0m\n\n"
+
+_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_flags.sh -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert "trace: fast module exits 0" "0" "$_trace_rc"
+_assert_contains "trace: output contains Shortlist header" "Shortlist" "$_trace_out"
+_assert_contains "trace: output contains Help header" "Help" "$_trace_out"
+_assert_contains "trace: output shows shortlist lines" "shortlist" "$_trace_out"
+
+_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_slow.sh -t 50 -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert "trace: slow enum exits 1 when exceeding threshold" "1" "$_trace_rc"
+_assert_contains "trace: output shows warning count" "warning" "$_trace_out"
+
+_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 200 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert "trace: generated multi-module CLI exits 0" "0" "$_trace_rc"
+
+_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" hello -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert_contains "trace: scoped to hello shows hello commands" "shortlist hello" "$_trace_out"
+_assert_not_contains "trace: scoped to hello excludes install" "shortlist install" "$_trace_out"
+
+_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" hello greet -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert_contains "trace: scoped to greet shows greet" "shortlist hello greet" "$_trace_out"
+_assert_not_contains "trace: scoped to greet excludes farewell" "shortlist hello farewell" "$_trace_out"
 
 # ============================================================
 printf "\n\033[1m Results \033[0m\n\n"
