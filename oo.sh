@@ -206,16 +206,16 @@ main() {
         case "$val" in true|false|1|0|yes|no) _consume=true ;; esac
         if [[ "$_consume" == true ]]; then
           [[ -z "$val" ]] && val=true
-          export "$p_var=$val"; str="${str/${BASH_REMATCH[0]}/}"
+          printf -v "$p_var" '%s' "$val"; str="${str/${BASH_REMATCH[0]}/}"
         else
-          export "$p_var=true"; str="${str/${s}${BASH_REMATCH[1]}/}"
+          printf -v "$p_var" '%s' "true"; str="${str/${s}${BASH_REMATCH[1]}/}"
         fi
         _was_set=true
       elif [[ "$str" == *"${s}${_short}" || "$str" == *"${s}${_long}" ]]; then
-        export "$p_var=true"; str="${str/${s}${_short}/}"; str="${str/${s}${_long}/}"
+        printf -v "$p_var" '%s' "true"; str="${str/${s}${_short}/}"; str="${str/${s}${_long}/}"
         _was_set=true
       else
-        [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
+        [[ -z "${!p_var}" ]] && printf -v "$p_var" '%s' "$p_def"
       fi
     elif [[ "$_is_array" == true ]]; then
       local _arr_vals="" _arr_sep=$'\x1E'
@@ -229,21 +229,21 @@ main() {
         _was_set=true
       done
       if [[ "$_was_set" == true ]]; then
-        export "$p_var=$_arr_vals"
+        printf -v "$p_var" '%s' "$_arr_vals"
       elif [[ -z "${!p_var}" ]]; then
         if [[ -n "$p_def" ]]; then
-          export "$p_var=${p_def//,/$_arr_sep}"
+          printf -v "$p_var" '%s' "${p_def//,/$_arr_sep}"
         else
-          export "$p_var="
+          printf -v "$p_var" '%s' ""
         fi
       fi
       _oo_array_vars+="$p_var "
     elif [[ "$str" =~ ${s}($p_flag)([$s=])([^$s]*) ]]; then
       local val="${BASH_REMATCH[3]}"; val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
-      export "$p_var=$val"; str="${str/${BASH_REMATCH[0]}/}"
+      printf -v "$p_var" '%s' "$val"; str="${str/${BASH_REMATCH[0]}/}"
       _was_set=true
     else
-      [[ -z "${!p_var}" ]] && export "$p_var=$p_def"
+      [[ -z "${!p_var}" ]] && printf -v "$p_var" '%s' "$p_def"
     fi
 
     # --- Validation (dynamic enums resolved lazily, only when flag was set) ---
