@@ -234,7 +234,7 @@ oosh trace mytool                    # trace everything
 oosh trace mytool kube               # trace only the kube module
 oosh trace mytool kube use           # trace only "use" command in kube
 oosh trace ./modules/kube.sh         # trace a specific module file
-oosh trace mytool -t 50              # custom threshold (default 100ms)
+oosh trace mytool -t 50              # custom threshold (default 150ms)
 oosh trace mytool -r 10              # custom runs (default 5)
 ```
 
@@ -246,7 +246,7 @@ Sample output:
   | (_) || (_) | \__ \ | '_ \
    \___/  \___/  |___/ |_| |_|
 
-  oosh trace — mytool (5 runs, threshold: 100ms)
+  oosh trace — mytool (5 runs, threshold: 150ms)
 
   Shortlist
   ✔  shortlist                                  15ms
@@ -261,7 +261,7 @@ Sample output:
   1 warning — slowest: shortlist kube deploy --namespace (5204ms)
 ```
 
-Colors: green ≤50ms, yellow 51–threshold, red >threshold. Exit code: 0 if no warnings, 1 if any — CI-friendly.
+Colors: green <100ms, yellow 100–150ms, red >150ms. Exit code: 0 if no warnings, 1 if any — CI-friendly.
 
 ## 🎨 Colors
 

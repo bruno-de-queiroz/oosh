@@ -28,7 +28,7 @@ _fail() { printf "\n  ${ERR}  ${RD}%s${RST}\n\n" "$*" >&2; exit 1; }
 _resolve() { local s="$1"; while [ -L "$s" ]; do local d="$(cd "$(dirname "$s")" && pwd)"; s="$(readlink "$s")"; [[ "$s" != /* ]] && s="$d/$s"; done; echo "$s"; }
 
 # --- arg parsing ---
-TARGET=""  SCOPE_MOD=""  SCOPE_CMD=""  THRESHOLD=100  RUNS=5  MAX_ITEMS=20
+TARGET=""  SCOPE_MOD=""  SCOPE_CMD=""  THRESHOLD=150  RUNS=5  MAX_ITEMS=20
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -85,18 +85,17 @@ _run() {
 
 _trace() {
   local label="$1"; shift
-  local total=0 i t0 t1
+  local t0 t1 i
+  t0=$(_ms)
   for (( i=0; i<RUNS; i++ )); do
-    t0=$(_ms)
     _run "$@" >/dev/null 2>&1
-    t1=$(_ms)
-    total=$((total + t1 - t0))
   done
-  local elapsed=$((total / RUNS))
+  t1=$(_ms)
+  local elapsed=$(( (t1 - t0) / RUNS ))
   local color="$GR" icon="$OK"
   if [[ "$elapsed" -gt "$THRESHOLD" ]]; then
     color="$RD"; icon="$ERR"; _WARNINGS=$((_WARNINGS + 1))
-  elif [[ "$elapsed" -gt 50 ]]; then
+  elif [[ "$elapsed" -ge 100 ]]; then
     color="$YL"; icon="${YL}✔${RST}"
   fi
   [[ "$elapsed" -gt "$_SLOWEST_MS" ]] && { _SLOWEST_MS="$elapsed"; _SLOWEST="$label"; }
