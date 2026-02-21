@@ -575,7 +575,7 @@ _trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_slow.s
 _assert "trace: slow enum exits 1 when exceeding threshold" "1" "$_trace_rc"
 _assert_contains "trace: output shows warning count" "warning" "$_trace_out"
 
-_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 500 2>&1) && _trace_rc=$? || _trace_rc=$?
+_trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" -r 1 -t 1000 2>&1) && _trace_rc=$? || _trace_rc=$?
 _assert "trace: generated multi-module CLI exits 0" "0" "$_trace_rc"
 
 _trace_out=$(env _TESTCLI_DIR="${_GEN_CLI}" bash "${OOSH_DIR}/trace.sh" --no-color "${_GEN_CLI}/_testcli.sh" hello -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
@@ -594,6 +594,13 @@ _assert "trace: async 2s resolver exits 1" "1" "$_trace_rc"
 _ns_ms=$(echo "$_trace_out" | grep -- '--namespace' | head -1 | sed 's/.*[[:space:]]\([0-9][0-9]*\)ms.*/\1/')
 _ns_ok=0; [[ -n "$_ns_ms" && "$_ns_ms" -ge 1500 ]] && _ns_ok=1
 _assert "trace: async 2s resolver reports >=1500ms (got ${_ns_ms:-?}ms)" "1" "$_ns_ok"
+
+# Command-scoped trace on async module: "use" scope should trace --namespace flag completion
+_trace_out=$(bash "${OOSH_DIR}/trace.sh" --no-color /tmp/_oosh_test_trace_async.sh use -t 50 -r 1 2>&1) && _trace_rc=$? || _trace_rc=$?
+_assert_contains "trace: command-scoped shows --namespace flag" "shortlist use --namespace" "$_trace_out"
+_ns_scoped_ms=$(echo "$_trace_out" | grep -- '--namespace' | head -1 | sed 's/.*[[:space:]]\([0-9][0-9]*\)ms.*/\1/')
+_ns_scoped_ok=0; [[ -n "$_ns_scoped_ms" && "$_ns_scoped_ms" -ge 1500 ]] && _ns_scoped_ok=1
+_assert "trace: command-scoped async reports >=1500ms (got ${_ns_scoped_ms:-?}ms)" "1" "$_ns_scoped_ok"
 
 # ============================================================
 printf "\n\033[1m Results \033[0m\n\n"

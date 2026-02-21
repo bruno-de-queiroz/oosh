@@ -215,10 +215,41 @@ _top_items=$(_read_words)
 _trace "shortlist${_SCOPE_LABEL}" shortlist ${_SCOPE_LABEL}
 
 if [[ -n "$SCOPE_CMD" ]]; then
-  # Scoped to command — only trace flag completions
+  # Scoped to command — trace flags and sub-items (same as module crawl)
   # shellcheck disable=SC2086
   _trace_flags "$_top_items" ${_SCOPE_LABEL}
+
+  # Also crawl sub-items (e.g. kube use <context> completions)
+  _scope_cmds=""
+  while IFS= read -r _item; do
+    [[ -z "$_item" || "$_item" == "help" || "$_item" == "shortlist" ]] && continue
+    case "$_item" in -*) ;; *) _scope_cmds="${_scope_cmds}${_item}"$'\n' ;; esac
+  done <<< "$_top_items"
+
+  _scope_count=0 _scope_total=0
+  while IFS= read -r _c; do [[ -n "$_c" ]] && _scope_total=$((_scope_total + 1)); done <<< "$_scope_cmds"
+
+  while IFS= read -r _scmd; do
+    [[ -z "$_scmd" ]] && continue
+    if [[ $_scope_count -ge $MAX_ITEMS ]]; then
+      _remaining=$((_scope_total - MAX_ITEMS))
+      [[ $_remaining -gt 0 ]] && printf "  ${DIM}     (... and %d more)${RST}\n" "$_remaining"
+      break
+    fi
+    # shellcheck disable=SC2086
+    _timed_get_words ${_SCOPE_LABEL} "$_scmd"
+    _scmd_items=$(_read_words)
+    # shellcheck disable=SC2086
+    _trace "shortlist${_SCOPE_LABEL} $_scmd" shortlist ${_SCOPE_LABEL} "$_scmd"
+    # shellcheck disable=SC2086
+    _trace_flags "$_scmd_items" ${_SCOPE_LABEL} "$_scmd"
+    _scope_count=$((_scope_count + 1))
+  done <<< "$_scope_cmds"
 else
+  # Trace flag completions at scope level (handles single-module files and module-level flags)
+  # shellcheck disable=SC2086
+  _trace_flags "$_top_items" ${_SCOPE_LABEL}
+
   # Separate into commands and flags
   _top_cmds=""
   while IFS= read -r _item; do
