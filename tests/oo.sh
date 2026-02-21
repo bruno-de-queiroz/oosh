@@ -266,7 +266,7 @@ _assert "enum --env dev accepted" \
   "ENVIRONMENT=dev" \
   "$(bash /tmp/_oosh_test_flags.sh --env dev test-enum)"
 
-_assert_exit "enum --env invalid rejected" 1 \
+_assert_exit "enum --env invalid rejected" 2 \
   bash /tmp/_oosh_test_flags.sh --env invalid test-enum
 
 _assert "enum default value" \
@@ -280,7 +280,7 @@ _assert "dynamic enum --env beta accepted" \
   "ENVIRONMENT=beta" \
   "$(bash /tmp/_oosh_test_dynamic_enum.sh --env beta test-it)"
 
-_assert_exit "dynamic enum --env invalid rejected" 1 \
+_assert_exit "dynamic enum --env invalid rejected" 2 \
   bash /tmp/_oosh_test_dynamic_enum.sh --env invalid test-it
 
 # ============================================================
@@ -298,7 +298,7 @@ _assert "number --port 3.14 accepted" \
   "PORT=3.14" \
   "$(bash /tmp/_oosh_test_flags.sh --port 3.14 test-number)"
 
-_assert_exit "number --port abc rejected" 1 \
+_assert_exit "number --port abc rejected" 2 \
   bash /tmp/_oosh_test_flags.sh --port abc test-number
 
 _assert "number default value" \
@@ -453,10 +453,10 @@ _assert "array(enum): valid CSV accepted" \
   "LABEL=alpha gamma LABEL_COUNT=2" \
   "$(bash /tmp/_oosh_test_array_enum.sh --label alpha,gamma test-array)"
 
-_assert_exit "array(enum): invalid value rejected" 1 \
+_assert_exit "array(enum): invalid value rejected" 2 \
   bash /tmp/_oosh_test_array_enum.sh --label alpha --label invalid test-array
 
-_assert_exit "array(enum): invalid in CSV rejected" 1 \
+_assert_exit "array(enum): invalid in CSV rejected" 2 \
   bash /tmp/_oosh_test_array_enum.sh --label alpha,bad test-array
 
 # ============================================================
@@ -466,7 +466,7 @@ _assert "array(enum(\${fn})): valid accepted" \
   "ENV=dev prod ENV_COUNT=2" \
   "$(bash /tmp/_oosh_test_array_dyn.sh --env dev --env prod test-array)"
 
-_assert_exit "array(enum(\${fn})): invalid rejected" 1 \
+_assert_exit "array(enum(\${fn})): invalid rejected" 2 \
   bash /tmp/_oosh_test_array_dyn.sh --env dev --env nope test-array
 
 # ============================================================
@@ -527,7 +527,7 @@ _assert "escaped quotes: default value preserves inner quotes" \
 # ============================================================
 printf "\n\033[1m Number validation \033[0m\n\n"
 
-_assert_exit "number: trailing dot rejected" 1 \
+_assert_exit "number: trailing dot rejected" 2 \
   bash /tmp/_oosh_test_flags.sh --port 123. test-number
 
 _assert "number: decimal accepted" \
@@ -538,17 +538,31 @@ _assert "number: decimal accepted" \
 printf "\n\033[1m Unknown flags warning \033[0m\n\n"
 
 _assert_contains "unknown flag: --vrebose warns on stderr" \
-  "unknown flag '--vrebose'" \
+  "ignored unknown flag '--vrebose'" \
   "$(bash /tmp/_oosh_test_flags.sh --vrebose test-bool 2>&1)"
 
 _assert_not_contains "known flag: --verbose no warning" \
-  "unknown flag" \
+  "ignored unknown flag" \
   "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool 2>&1)"
+
+# ============================================================
+printf "\n\033[1m Unknown command \033[0m\n\n"
+
+_assert_exit "unknown command: exits 2" 2 \
+  bash /tmp/_oosh_test_flags.sh nonexistent
+
+_assert_contains "unknown command: shows error message" \
+  "unknown command 'nonexistent'" \
+  "$(bash /tmp/_oosh_test_flags.sh nonexistent 2>&1)"
+
+_assert_contains "unknown command: shows help after error" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_flags.sh nonexistent 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Required flags \033[0m\n\n"
 
-_assert_exit "required: missing flag exits 1" 1 \
+_assert_exit "required: missing flag exits 2" 2 \
   bash /tmp/_oosh_test_required.sh test-it
 
 _assert_contains "required: error lists missing flags" \
@@ -559,7 +573,7 @@ _assert "required: provided flags accepted" \
   "KEY=secret PORT=3000 NAME= ENV=prod LANG_CODE=en" \
   "$(bash /tmp/_oosh_test_required.sh --key secret --port 3000 --env prod test-it)"
 
-_assert_exit "required:number invalid value exits 1" 1 \
+_assert_exit "required:number invalid value exits 2" 2 \
   bash /tmp/_oosh_test_required.sh --key x --port abc --env prod test-it
 
 _assert_contains "required:number shows number error (not required error)" \
@@ -585,7 +599,7 @@ _assert "env: required + env var satisfies requirement" \
   "KEY=x PORT=80 NAME= ENV=staging LANG_CODE=en" \
   "$(TEST_OOSH_ENV=staging bash /tmp/_oosh_test_required.sh --key x --port 80 test-it)"
 
-_assert_exit "env: required + env unset + no flag exits 1" 1 \
+_assert_exit "env: required + env unset + no flag exits 2" 2 \
   bash /tmp/_oosh_test_required.sh --key x --port 80 test-it
 
 _assert "env: \${VAR:-fallback} uses fallback when unset" \

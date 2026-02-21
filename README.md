@@ -155,7 +155,8 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 - Default value in double quotes (empty string = no default). Escaped quotes supported: `"say \"hello\""`
 - Optional description after `~` separator (or use `#@description` on the next line)
 - Function declarations work with or without the `function` keyword (`deploy() {` and `function deploy()` are both discovered)
-- Unknown flags produce a warning on stderr (e.g. `warning: unknown flag '--vrebose'`)
+- Unknown flags are reported on stderr (e.g. `ignored unknown flag '--vrebose'`) and execution continues
+- Unknown commands show an error with help text and exit 2 (e.g. `unknown command 'foo'`)
 
 Flags are parsed from `$@` and set as shell variables. If a flag isn't provided and the variable is unset, the default kicks in.
 
@@ -386,32 +387,34 @@ That's it -- no config files, no registration, no build step. The module is auto
 
 ## ⏱️ Performance
 
-oosh parses annotations at runtime — no compilation, no caching. Here's the overhead vs a hand-rolled pure bash CLI (~130 lines of manual flag parsing, case statements, help text, and completion) doing the same job that oosh does in ~45 lines of annotations.
+oosh parses annotations at runtime — no compilation, no caching. The display and dispatch layer (`help`, `shortlist`, `_call`) uses zero external process forks — all string operations are pure bash builtins (`${var%%pattern}`, `${var//old/new}`, glob matching). Here's the overhead vs a hand-rolled pure bash CLI (~130 lines of manual flag parsing, case statements, help text, and completion) doing the same job that oosh does in ~45 lines of annotations.
 
 **macOS (bash 3.2, Apple Silicon, 20 runs)**
 
 | Operation | bash | oosh | Overhead |
 |---|---|---|---|
-| Tab-complete: top-level | 17ms | 51ms | +34ms |
-| Tab-complete: command flags | 17ms | 72ms | +55ms |
-| Tab-complete: enum values | 16ms | 58ms | +42ms |
-| Help | 23ms | 106ms | +83ms |
-| Dispatch: simple command | 16ms | 45ms | +29ms |
-| Dispatch: 3 global + 3 local flags | 20ms | 46ms | +26ms |
-| Dispatch: flags + boolean | 18ms | 46ms | +28ms |
+| Tab-complete: top-level | 16ms | 27ms | +11ms |
+| Tab-complete: command flags | 16ms | 27ms | +11ms |
+| Tab-complete: enum values | 16ms | 27ms | +11ms |
+| Help | 16ms | 33ms | +17ms |
+| Dispatch: simple command | 16ms | 26ms | +10ms |
+| Dispatch: enum + number flags | 16ms | 27ms | +11ms |
+| Dispatch: all flags combined | 16ms | 27ms | +11ms |
 
 **Linux (bash 5.1, Docker ubuntu:22.04, 20 runs)**
 
 | Operation | bash | oosh | Overhead |
 |---|---|---|---|
-| Tab-complete: top-level | 3ms | 15ms | +12ms |
-| Tab-complete: command flags | 2ms | 19ms | +17ms |
-| Tab-complete: enum values | 3ms | 17ms | +14ms |
-| Help | 3ms | 25ms | +22ms |
-| Dispatch: simple command | 3ms | 15ms | +12ms |
-| Dispatch: 3 global + 3 local flags | 3ms | 15ms | +12ms |
-| Dispatch: flags + boolean | 3ms | 14ms | +11ms |
+| Tab-complete: top-level | 2ms | 8ms | +6ms |
+| Tab-complete: command flags | 2ms | 8ms | +6ms |
+| Tab-complete: enum values | 2ms | 9ms | +7ms |
+| Help | 2ms | 10ms | +8ms |
+| Dispatch: simple command | 2ms | 9ms | +7ms |
+| Dispatch: enum + number flags | 2ms | 9ms | +7ms |
+| Dispatch: all flags combined | 2ms | 9ms | +7ms |
 
-Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 30ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~10-14ms on macOS, ~2-3ms on Linux).
+Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 6-17ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~14-16ms on macOS, ~2ms on Linux).
+
+Usage errors (invalid flags, missing required flags, unknown commands) exit with code 2 following POSIX convention. Runtime errors exit with code 1.
 
 Happy hacking! 🎉

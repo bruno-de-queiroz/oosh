@@ -46,7 +46,7 @@ _write_to_profile()    { local f="$1"; shift; [[ -f "$f" ]] && ! grep -qF "$*" "
 _remove_from_profile() { local f="$1"; shift; [[ -f "$f" ]] && grep -vF "$*" "$f" > "$f.tmp" && mv "$f.tmp" "$f"; }
 _info()  { printf "  ${_GR}✔${_RST}  %s\n" "$*"; }
 _error() { printf "  ${_RD}✘${_RST}  %s\n" "$*" >&2; }
-_die()   { _error "$*"; exit 1; }
+_die()   { _error "$*"; exit 2; }
 
 _resolve_enum() {
   local _el=" ${_SL_ENUM}" _key="$1"
@@ -56,13 +56,14 @@ _resolve_enum() {
     if [[ "$_tmp" =~ $_re_dyn ]]; then
       "${BASH_REMATCH[1]}" 2>/dev/null
     else
-      echo "${_tmp}" | tr ',' ' '
+      echo "${_tmp//,/ }"
     fi
   fi
 }
 
 _default_shortlist() {
-  if [[ -n "$1" ]] && printf '%b\n' "$GLOBAL_METHODS" | grep -q "^${1} "; then
+  local _nl=$'\n'
+  if [[ -n "$1" ]] && [[ "${_nl}${GLOBAL_METHODS}" == *"${_nl}${1} "* ]]; then
     if [[ -n "$2" && "$2" =~ ^- ]]; then
       if [[ " ${_SL_FILE_FLAGS}" == *" ${2} "* || " ${_SL_FILE_FLAGS}" == *" ${1}:${2} "* ]]; then
         echo __file__
@@ -74,8 +75,16 @@ _default_shortlist() {
       fi
       return 0
     fi
-    printf '%b\n' "$GLOBAL_FLAGS" | grep -v ':' | cut -f 1 -d " " | tr "|" " "
-    printf '%b\n' "$GLOBAL_FLAGS" | grep "^${1}:" | sed "s/^${1}://" | cut -f 1 -d " " | tr "|" " "
+    if [[ -n "$GLOBAL_FLAGS" ]]; then
+      while IFS= read -r _fl; do
+        [[ -z "$_fl" ]] && continue
+        if [[ "$_fl" != *:* ]]; then
+          local _fn="${_fl%% *}"; echo "${_fn//|/ }"
+        elif [[ "$_fl" == "${1}:"* ]]; then
+          _fl="${_fl#${1}:}"; local _fn="${_fl%% *}"; echo "${_fn//|/ }"
+        fi
+      done <<< "$GLOBAL_FLAGS"
+    fi
   elif [[ -n "$1" && "$1" =~ ^- ]]; then
     if [[ " ${_SL_FILE_FLAGS}" == *" ${1} "* ]]; then
       echo __file__
@@ -86,46 +95,65 @@ _default_shortlist() {
     fi
     return 0
   else
-    printf '%b\n' "$GLOBAL_METHODS" | cut -f 1 -d " "
+    if [[ -n "$GLOBAL_METHODS" ]]; then
+      while IFS= read -r _ml; do
+        [[ -n "$_ml" ]] && echo "${_ml%% *}"
+      done <<< "$GLOBAL_METHODS"
+    fi
     echo help
   fi
 }
 
 _default_help() {
   local name="${_B}${GLOBAL_PREFIX}$(basename "${GLOBAL_SCRIPT//.sh/}")${_RST}"
-  local methods=$(printf '%b\n' "$GLOBAL_METHODS" | cut -f 1 -d " " | tr '\n' ' ')
-  local flags=$(printf '%b\n' "$GLOBAL_FLAGS" | grep '^-' | cut -f 1 -d " " | sed -E 's/\|[^[:space:]]+//g' | tr '\n' ' ')
-
-  printf "\n  ${_DIM}Usage:${_RST} ${name} ${_CY}[ ${methods}help ]${_RST}"
+  local _methods="" _flags="" _has_module_flags=false
+  if [[ -n "$GLOBAL_METHODS" ]]; then
+    while IFS= read -r _ml; do
+      [[ -n "$_ml" ]] && _methods+="${_ml%% *} "
+    done <<< "$GLOBAL_METHODS"
+  fi
   if [[ -n "$GLOBAL_FLAGS" ]]; then
-    [[ -n "$flags" ]] && printf " ${_YL}[ ${flags}]${_RST}\n" || printf "\n"
-    local module_flags=$(printf '%b\n' "$GLOBAL_FLAGS" | grep '^-')
-    if [[ -n "$module_flags" ]]; then
-      printf "\n  ${_B}Flags:${_RST}\n"
-      printf '%s\n' "$module_flags" | while IFS= read -r line; do
-        local flag="${line%% *}"
-        local rest="${line#* }"
+    while IFS= read -r _fl; do
+      [[ -z "$_fl" || "$_fl" != -* ]] && continue
+      local _fn="${_fl%% *}"; _flags+="${_fn%%|*} "
+    done <<< "$GLOBAL_FLAGS"
+  fi
+
+  printf "\n  ${_DIM}Usage:${_RST} ${name} ${_CY}[ ${_methods}help ]${_RST}"
+  if [[ -n "$GLOBAL_FLAGS" ]]; then
+    [[ -n "$_flags" ]] && printf " ${_YL}[ ${_flags}]${_RST}\n" || printf "\n"
+    if [[ -n "$GLOBAL_FLAGS" ]]; then
+      while IFS= read -r line; do
+        [[ -z "$line" || "$line" != -* ]] && continue
+        if [[ "$_has_module_flags" == false ]]; then
+          printf "\n  ${_B}Flags:${_RST}\n"; _has_module_flags=true
+        fi
+        local flag="${line%% *}" rest="${line#* }"
         rest="${rest#"${rest%%[![:space:]]*}"}"
         printf "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}\n" "$flag" "$rest"
-      done
-      echo ""
-    else
-      printf "\n"
+      done <<< "$GLOBAL_FLAGS"
     fi
+    [[ "$_has_module_flags" == true ]] && echo "" || printf "\n"
   else
     printf "\n\n"
   fi
   printf "  ${_B}Commands:${_RST}\n"
-  printf '%b\n' "$GLOBAL_METHODS" | while IFS= read -r line; do
-    local cmd="${line%% *}"
-    local rest="${line#* }"
-    rest="${rest#"${rest%%[![:space:]]*}"}"
-    printf "  ${_CY}%-20s${_RST} ${_DIM}%s${_RST}\n" "$cmd" "$rest"
-    printf '%b\n' "$GLOBAL_FLAGS" | grep "^${cmd}:" | sed "s/^${cmd}://" | while IFS= read -r fline; do
-      local ff="${fline%% *}" fr="${fline#* }"; fr="${fr#"${fr%%[![:space:]]*}"}"
-      printf "    ${_YL}%-18s${_RST} ${_DIM}%s${_RST}\n" "$ff" "$fr"
-    done
-  done
+  if [[ -n "$GLOBAL_METHODS" ]]; then
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      local cmd="${line%% *}" rest="${line#* }"
+      rest="${rest#"${rest%%[![:space:]]*}"}"
+      printf "  ${_CY}%-20s${_RST} ${_DIM}%s${_RST}\n" "$cmd" "$rest"
+      if [[ -n "$GLOBAL_FLAGS" ]]; then
+        while IFS= read -r _fl; do
+          [[ "$_fl" != "${cmd}:"* ]] && continue
+          local fline="${_fl#${cmd}:}"
+          local ff="${fline%% *}" fr="${fline#* }"; fr="${fr#"${fr%%[![:space:]]*}"}"
+          printf "    ${_YL}%-18s${_RST} ${_DIM}%s${_RST}\n" "$ff" "$fr"
+        done <<< "$GLOBAL_FLAGS"
+      fi
+    done <<< "$GLOBAL_METHODS"
+  fi
   printf "  ${_CY}%-20s${_RST} ${_DIM}%s${_RST}\n" "help" "show options and flags available"
   echo ""
 }
@@ -138,14 +166,15 @@ _default_version() {
 
 _default_call() {
   local first="$1"; shift
-  if printf '%b\n' "$GLOBAL_METHODS" | grep -q "^${first} "; then
+  local _nl=$'\n'
+  if [[ -n "$first" ]] && [[ "${_nl}${GLOBAL_METHODS}" == *"${_nl}${first} "* ]]; then
     "$first" "$@"; exit 0
   fi
   case "$first" in
     shortlist)            _shortlist "$@" ;;
     help|--help|-h)       _help ;;
     version|--version|-V) _version ;;
-    *)                    _help ;;
+    *)                    _error "unknown command '${first}'"; _help; exit 2 ;;
   esac
 }
 
@@ -356,8 +385,10 @@ main() {
         _flush_flag
         if [[ "$t" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) && -n "$p_vis" ]]; then
           local fname="${BASH_REMATCH[1]}"
-          [[ "$p_vis" == public ]] && \
-            methods+=$(printf "$([[ -n "$methods" ]] && echo '\\n')%-20s %s" "$fname" "$p_desc")
+          if [[ "$p_vis" == public ]]; then
+            [[ -n "$methods" ]] && methods+=$'\n'
+            methods+="$(printf '%-20s %s' "$fname" "$p_desc")"
+          fi
           if [[ -n "$mf_help" ]]; then
             while IFS= read -r _ml; do
               [[ -n "$flags" ]] && flags+=$'\n'; flags+="${fname}:${_ml}"
@@ -392,7 +423,7 @@ main() {
   if [[ "$str" != *"${s}shortlist"* ]]; then
     local _uf_str="$str" _re_uf="${s}(--?[a-zA-Z][^${s}]*)"
     while [[ "$_uf_str" =~ $_re_uf ]]; do
-      case "${BASH_REMATCH[1]}" in -h|--help|-V|--version) ;; *) printf "warning: unknown flag '%s'\n" "${BASH_REMATCH[1]}" >&2 ;; esac
+      case "${BASH_REMATCH[1]}" in -h|--help|-V|--version) ;; *) printf "ignored unknown flag '%s'\n" "${BASH_REMATCH[1]}" >&2 ;; esac
       _uf_str="${_uf_str/${BASH_REMATCH[0]}/}"
     done
   fi
@@ -410,9 +441,9 @@ main() {
   local _av; for _av in $_oo_array_vars; do
     local _raw="${!_av}"
     if [[ -n "$_raw" ]]; then
-      local _old_ifs="$IFS"; IFS=$'\x1E'; eval "$_av=(\$_raw)"; IFS="$_old_ifs"
+      IFS=$'\x1E' read -ra "$_av" <<< "$_raw"
     else
-      eval "$_av=()"
+      read -ra "$_av" < /dev/null || true
     fi
   done
 
