@@ -124,6 +124,8 @@ _report_no_desc() {
 _is_valid_type() {
   local t="$1"
   [[ -z "$t" ]] && return 0
+  # Strip required prefix before checking inner type
+  case "$t" in required:*) t="${t#required:}" ;; required) return 0 ;; esac
   [[ "$_VALID_BASE_TYPES" == *" $t "* ]] && return 0
   [[ "$t" =~ $_RE_ENUM ]] && return 0
   [[ "$t" =~ $_RE_ARRAY_TYPED ]] && return 0
@@ -190,6 +192,7 @@ _validate_file() {
         if [[ "$t" =~ $_RE_FLAG ]]; then
           local flag_name="${BASH_REMATCH[1]}"
           local flag_var="${BASH_REMATCH[2]}"
+          local flag_def="${BASH_REMATCH[3]}"
           local flag_type="${BASH_REMATCH[5]}"
           local flag_desc="${BASH_REMATCH[7]}"
 
@@ -210,6 +213,13 @@ _validate_file() {
           # Check type validity
           if [[ -n "$flag_type" ]] && ! _is_valid_type "$flag_type"; then
             _report_error "$file" "$line_num" "invalid type '${flag_type}' for ${flag_name}"
+          fi
+
+          # Check required with non-empty literal default (contradictory)
+          if [[ "$flag_type" == required* ]]; then
+            if [[ -n "$flag_def" && ! "$flag_def" =~ ^\$\{[A-Z_][A-Z0-9_]*\}$ ]]; then
+              _report_warning "$file" "$line_num" "required flag ${flag_name} has non-empty default — required check will never trigger"
+            fi
           fi
 
           # Check duplicate flag names in same scope

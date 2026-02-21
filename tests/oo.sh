@@ -199,6 +199,19 @@ SCRIPT
   printf 'main $0 "$@"\n'
 } > /tmp/_oosh_test_escaped_quotes.sh
 
+# Fixture: required flags + env var fallback
+cat > /tmp/_oosh_test_required.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@flag -k|--key KEY "" required ~ api key
+#@flag -p|--port PORT "" required:number ~ server port
+#@flag -n|--name NAME "\${TEST_OOSH_NAME}" ~ name with env fallback
+#@flag -e|--env ENV "\${TEST_OOSH_ENV}" required ~ required with env fallback
+#@public ~ test required flags
+function test-it() { echo "KEY=\$KEY PORT=\$PORT NAME=\$NAME ENV=\$ENV"; }
+main \$0 "\$@"
+SCRIPT
+
 cleanup() {
   rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh \
        /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh \
@@ -206,7 +219,7 @@ cleanup() {
        /tmp/_oosh_test_slow_enum.sh /tmp/_oosh_test_baseline.sh \
        /tmp/_oosh_test_array.sh /tmp/_oosh_test_array_enum.sh \
        /tmp/_oosh_test_array_dyn.sh /tmp/_oosh_test_array_default.sh \
-       /tmp/_oosh_test_escaped_quotes.sh
+       /tmp/_oosh_test_escaped_quotes.sh /tmp/_oosh_test_required.sh
 }
 trap cleanup EXIT
 
@@ -530,6 +543,49 @@ _assert_contains "unknown flag: --vrebose warns on stderr" \
 _assert_not_contains "known flag: --verbose no warning" \
   "unknown flag" \
   "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool 2>&1)"
+
+# ============================================================
+printf "\n\033[1m Required flags \033[0m\n\n"
+
+_assert_exit "required: missing flag exits 1" 1 \
+  bash /tmp/_oosh_test_required.sh test-it
+
+_assert_contains "required: error lists missing flags" \
+  "missing required flag" \
+  "$(bash /tmp/_oosh_test_required.sh test-it 2>&1)"
+
+_assert "required: provided flags accepted" \
+  "KEY=secret PORT=3000 NAME= ENV=prod" \
+  "$(bash /tmp/_oosh_test_required.sh --key secret --port 3000 --env prod test-it)"
+
+_assert_exit "required:number invalid value exits 1" 1 \
+  bash /tmp/_oosh_test_required.sh --key x --port abc --env prod test-it
+
+_assert_contains "required:number shows number error (not required error)" \
+  "expected: number" \
+  "$(bash /tmp/_oosh_test_required.sh --key x --port abc --env prod test-it 2>&1)"
+
+_out=$(bash /tmp/_oosh_test_required.sh help 2>&1) && _rc=$? || _rc=$?
+_assert "required: help works without flags" "0" "$_rc"
+_assert_contains "required: help shows (required)" "(required)" "$_out"
+
+# ============================================================
+printf "\n\033[1m Env var fallback \033[0m\n\n"
+
+_assert "env: fallback expands env var" \
+  "KEY=x PORT=80 NAME=alice ENV=prod" \
+  "$(TEST_OOSH_NAME=alice bash /tmp/_oosh_test_required.sh --key x --port 80 --env prod test-it)"
+
+_assert_contains "env: help shows [env: VAR]" \
+  "[env: TEST_OOSH_NAME]" \
+  "$(bash /tmp/_oosh_test_required.sh help 2>&1)"
+
+_assert "env: required + env var satisfies requirement" \
+  "KEY=x PORT=80 NAME= ENV=staging" \
+  "$(TEST_OOSH_ENV=staging bash /tmp/_oosh_test_required.sh --key x --port 80 test-it)"
+
+_assert_exit "env: required + env unset + no flag exits 1" 1 \
+  bash /tmp/_oosh_test_required.sh --key x --port 80 test-it
 
 # ============================================================
 printf "\n\033[1m Performance \033[0m\n\n"

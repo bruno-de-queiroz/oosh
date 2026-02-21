@@ -326,6 +326,38 @@ SCRIPT
 _out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/okflag.sh" 2>&1) && _rc=$? || _rc=$?
 _assert_not_contains "lint: 20-char flag no warning" "exceeds help column" "$_out"
 
+# --- required type validation ---
+cat > "${_FIX_DIR}/required_ok.sh" << 'SCRIPT'
+#!/bin/bash
+#@flag -k|--key KEY "" required ~ api key
+#@flag -p|--port PORT "" required:number ~ server port
+#@flag -e|--env ENV "" required:enum(dev,prod) ~ target env
+#@public ~ test
+function test-it() { echo "ok"; }
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/required_ok.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: required types accepted" "0" "$_rc"
+
+cat > "${_FIX_DIR}/required_bad.sh" << 'SCRIPT'
+#!/bin/bash
+#@flag -k|--key KEY "hardcoded" required ~ api key
+#@public ~ test
+function test-it() { echo "ok"; }
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/required_bad.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: required with literal default exits 0 (warning)" "0" "$_rc"
+_assert_contains "lint: required with literal default warns" "required check will never trigger" "$_out"
+
+cat > "${_FIX_DIR}/required_env.sh" << 'SCRIPT'
+#!/bin/bash
+#@flag -k|--key KEY "${API_KEY}" required ~ api key
+#@public ~ test
+function test-it() { echo "ok"; }
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/required_env.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: required with env var default exits 0" "0" "$_rc"
+_assert_not_contains "lint: required with env var default no contradictory warning" "required check will never trigger" "$_out"
+
 # --- performance ---
 _assert_perf "lint: single file <200ms" 200 bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/deploy.sh"
 _assert_perf "lint: multi-module <500ms" 500 env "_TESTCLI_V_DIR=${_GEN_CLI}" bash "${OOSH_DIR}/lint.sh" --no-color "${_GEN_CLI}/_testcli_v.sh"

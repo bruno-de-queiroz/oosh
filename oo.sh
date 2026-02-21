@@ -94,12 +94,12 @@ _default_shortlist() {
 _default_help() {
   local name="${_B}${GLOBAL_PREFIX}$(basename "${GLOBAL_SCRIPT//.sh/}")${_RST}"
   local methods=$(printf '%b\n' "$GLOBAL_METHODS" | cut -f 1 -d " " | tr '\n' ' ')
-  local flags=$(printf '%b\n' "$GLOBAL_FLAGS" | grep -v ':' | cut -f 1 -d " " | sed -E 's/\|[^[:space:]]+//g' | tr '\n' ' ')
+  local flags=$(printf '%b\n' "$GLOBAL_FLAGS" | grep '^-' | cut -f 1 -d " " | sed -E 's/\|[^[:space:]]+//g' | tr '\n' ' ')
 
   printf "\n  ${_DIM}Usage:${_RST} ${name} ${_CY}[ ${methods}help ]${_RST}"
   if [[ -n "$GLOBAL_FLAGS" ]]; then
     [[ -n "$flags" ]] && printf " ${_YL}[ ${flags}]${_RST}\n" || printf "\n"
-    local module_flags=$(printf '%b\n' "$GLOBAL_FLAGS" | grep -v ':')
+    local module_flags=$(printf '%b\n' "$GLOBAL_FLAGS" | grep '^-')
     if [[ -n "$module_flags" ]]; then
       printf "\n  ${_B}Flags:${_RST}\n"
       printf '%s\n' "$module_flags" | while IFS= read -r line; do
@@ -163,6 +163,7 @@ main() {
   local p_vis="" p_desc="" p_flag="" p_var="" p_def="" p_fdesc="" p_ftype=""
   local mf_help="" mf_file="" mf_dir="" mf_enum=""
   local _oo_array_vars=""
+  local _missing_required=""
 
   # Regex patterns stored in variables for bash 3.2 compatibility
   local _re_enum_dyn='^enum\(\$\{([^}]+)\}\)$'
@@ -170,11 +171,24 @@ main() {
   local _re_array_typed='^array\((.+)\)$'
   local _re_array_plain='^array$'
   local _re_quoted='"(([^"\\]|\\.)*)"'
+  local _re_env='^\$\{([A-Z_][A-Z0-9_]*)\}$'
   local _re_flag='^#@flag[[:space:]]+([^[:space:]]+)[[:space:]]+([A-Z_][A-Z0-9_]*)[[:space:]]+'$_re_quoted'[[:space:]]*([^[:space:]~]*)[[:space:]]*(~[[:space:]]+(.*))?'
 
   # Flush pending flag: build help string + extract value from args
   _flush_flag() {
     [[ -z "$p_flag" ]] && return
+    # Detect required modifier and strip from type
+    local _required=false
+    case "$p_ftype" in
+      required:*) _required=true; p_ftype="${p_ftype#required:}" ;;
+      required)   _required=true; p_ftype="" ;;
+    esac
+    # Detect env var fallback in default (e.g. "${API_KEY}")
+    local _env_hint=""
+    if [[ "$p_def" =~ $_re_env ]]; then
+      _env_hint="${BASH_REMATCH[1]}"
+      p_def="${!_env_hint:-}"
+    fi
     # Detect array wrapper, then extract inner type
     local _is_array=false _effective_type="$p_ftype"
     if [[ "$p_ftype" =~ $_re_array_typed ]]; then
@@ -194,7 +208,9 @@ main() {
     # Build help line (append enum values to description for static enums)
     local help_desc="$p_fdesc"
     [[ -n "$_enum_vals" ]] && help_desc+=" [${_enum_vals//,/, }]"
+    [[ "$_required" == true ]] && help_desc+=" (required)"
     [[ "$_is_array" == true ]] && help_desc+=" (multiple)"
+    [[ -n "$_env_hint" ]] && help_desc+=" [env: ${_env_hint}]"
     local help_line=$(printf "%-20s %s" "$p_flag" "$help_desc")
     local _short="${p_flag%%|*}" _long="${p_flag#*|}"
 
@@ -272,6 +288,11 @@ main() {
       if [[ "$p_ftype" == "number" && -n "$_val" ]]; then
         [[ "$_val" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || _die "invalid value '${_val}' for $p_flag (expected: number)"
       fi
+    fi
+
+    # --- Track missing required flags (checked before dispatch) ---
+    if [[ "$_required" == true && "$_was_set" == false && -z "${!p_var}" ]]; then
+      _missing_required+="${p_flag} "
     fi
 
     # --- Store help + completion info ---
@@ -367,6 +388,14 @@ main() {
       case "${BASH_REMATCH[1]}" in -h|--help|-V|--version) ;; *) printf "warning: unknown flag '%s'\n" "${BASH_REMATCH[1]}" >&2 ;; esac
       _uf_str="${_uf_str/${BASH_REMATCH[0]}/}"
     done
+  fi
+
+  # Check required flags (skip for help/shortlist/version)
+  if [[ -n "$_missing_required" ]]; then
+    case "$str" in
+      *"${s}shortlist"*|*"${s}help"*|*"${s}--help"*|*"${s}-h"*|*"${s}--version"*|*"${s}-V"*|*"${s}version"*) ;;
+      *) _die "missing required flag: ${_missing_required% }" ;;
+    esac
   fi
 
   str="${str#${s}}"
