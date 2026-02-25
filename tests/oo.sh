@@ -397,6 +397,45 @@ _assert_contains "-h shows usage" \
   "$(bash /tmp/_oosh_test_flags.sh -h 2>&1)"
 
 # ============================================================
+printf "\n\033[1m Command-specific help \033[0m\n\n"
+
+_assert_contains "command --help shows command name" \
+  "test-bool" \
+  "$(bash /tmp/_oosh_test_flags.sh test-bool --help 2>&1)"
+
+_assert_contains "command --help shows command description" \
+  "test boolean flags" \
+  "$(bash /tmp/_oosh_test_flags.sh test-bool --help 2>&1)"
+
+_assert_contains "command --help shows command-scoped flag" \
+  "--dry-run" \
+  "$(bash /tmp/_oosh_test_flags.sh test-bool --help 2>&1)"
+
+_assert_contains "command --help shows global flag" \
+  "--verbose" \
+  "$(bash /tmp/_oosh_test_flags.sh test-bool --help 2>&1)"
+
+_assert_not_contains "command --help hides other command flags" \
+  "--dry-run" \
+  "$(bash /tmp/_oosh_test_flags.sh test-enum --help 2>&1)"
+
+_assert_contains "command -h works" \
+  "test-enum" \
+  "$(bash /tmp/_oosh_test_flags.sh test-enum -h 2>&1)"
+
+_assert_contains "help <command> works" \
+  "test-number" \
+  "$(bash /tmp/_oosh_test_flags.sh help test-number 2>&1)"
+
+_assert_contains "help <command> shows description" \
+  "test number flags" \
+  "$(bash /tmp/_oosh_test_flags.sh help test-number 2>&1)"
+
+_assert_contains "help (no command) still shows full help" \
+  "Commands:" \
+  "$(bash /tmp/_oosh_test_flags.sh help 2>&1)"
+
+# ============================================================
 printf "\n\033[1m --version / -V \033[0m\n\n"
 
 _assert_contains "--version with #@version shows CLI and oosh version" \

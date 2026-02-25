@@ -19,7 +19,7 @@
 #   main $0 "$@"
 #
 
-OO_VERSION="1.0.0"
+OO_VERSION="1.1.0"
 
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
@@ -158,6 +158,49 @@ _default_help() {
   echo ""
 }
 
+_default_command_help() {
+  local cmd="$1"
+  local name="${_B}${GLOBAL_PREFIX}$(basename "${GLOBAL_SCRIPT//.sh/}")${_RST}"
+  local _cmd_desc="" _flags="" _flag_lines="" _has_flags=false
+
+  # Extract command description
+  if [[ -n "$GLOBAL_METHODS" ]]; then
+    while IFS= read -r _ml; do
+      [[ -z "$_ml" ]] && continue
+      local _cn="${_ml%% *}"
+      if [[ "$_cn" == "$cmd" ]]; then
+        _cmd_desc="${_ml#* }"; _cmd_desc="${_cmd_desc#"${_cmd_desc%%[![:space:]]*}"}"; break
+      fi
+    done <<< "$GLOBAL_METHODS"
+  fi
+
+  # Single pass: collect usage-line short names + flag detail lines
+  if [[ -n "$GLOBAL_FLAGS" ]]; then
+    while IFS= read -r _fl; do
+      [[ -z "$_fl" ]] && continue
+      local _line="$_fl"
+      if [[ "$_fl" == "${cmd}:"* ]]; then
+        _line="${_fl#${cmd}:}"
+      elif [[ "$_fl" != -* || "$_fl" == *:* ]]; then
+        continue
+      fi
+      local _fn="${_line%% *}"; _flags+="${_fn%%|*} "
+      local _fr="${_line#* }"; _fr="${_fr#"${_fr%%[![:space:]]*}"}"
+      _flag_lines+="$(printf "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}" "$_fn" "$_fr")"$'\n'
+    done <<< "$GLOBAL_FLAGS"
+  fi
+
+  printf "\n  ${_DIM}Usage:${_RST} ${name} ${_CY}${cmd}${_RST}"
+  [[ -n "$_flags" ]] && printf " ${_YL}[ ${_flags}]${_RST}"
+  printf "\n"
+  [[ -n "$_cmd_desc" ]] && printf "\n  %s\n" "$_cmd_desc"
+  if [[ -n "$_flag_lines" ]]; then
+    printf "\n  ${_B}Flags:${_RST}\n"
+    printf "%s" "$_flag_lines"
+  fi
+  echo ""
+}
+
 _default_version() {
   local name="$(basename "${GLOBAL_SCRIPT//.sh/}")"
   [[ -n "$GLOBAL_VERSION" ]] && printf "%s %s " "$name" "$GLOBAL_VERSION"
@@ -168,21 +211,30 @@ _default_call() {
   local first="$1"; shift
   local _nl=$'\n'
   if [[ -n "$first" ]] && [[ "${_nl}${GLOBAL_METHODS}" == *"${_nl}${first} "* ]]; then
+    local _arg; for _arg in "$@"; do
+      case "$_arg" in --help|-h) _command_help "$first"; return 0 ;; esac
+    done
     "$first" "$@"; exit 0
   fi
   case "$first" in
     shortlist)            _shortlist "$@" ;;
-    help|--help|-h)       _help ;;
+    help|--help|-h)
+      if [[ -n "$1" ]] && [[ "${_nl}${GLOBAL_METHODS}" == *"${_nl}${1} "* ]]; then
+        _command_help "$1"
+      else
+        _help
+      fi ;;
     version|--version|-V) _version ;;
     *)                    _error "unknown command '${first}'"; _help; exit 2 ;;
   esac
 }
 
 # Override stubs — modules redefine these to customise behaviour
-_shortlist() { _default_shortlist "$@"; }
-_help()      { _default_help "$@"; }
-_call()      { _default_call "$@"; }
-_version()   { _default_version "$@"; }
+_shortlist()    { _default_shortlist "$@"; }
+_help()         { _default_help "$@"; }
+_command_help() { _default_command_help "$@"; }
+_call()         { _default_call "$@"; }
+_version()      { _default_version "$@"; }
 
 main() {
   local script="$1"; shift
