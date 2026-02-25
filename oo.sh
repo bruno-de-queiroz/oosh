@@ -19,7 +19,7 @@
 #   main $0 "$@"
 #
 
-OO_VERSION="1.2.0"
+OO_VERSION="1.2.1"
 
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
@@ -475,12 +475,24 @@ main() {
 
   # Warn about unknown flags (all known flags already removed from str)
   # Skip during tab completion (shortlist passes flag names as positional args)
+  # Skip when first positional arg is not a locally-defined command — flags may
+  # belong to a module that _call dispatches to.
   if [[ "$str" != *"${s}shortlist"* ]]; then
-    local _uf_str="$str" _re_uf="${s}(--?[a-zA-Z][^${s}]*)"
-    while [[ "$_uf_str" =~ $_re_uf ]]; do
-      case "${BASH_REMATCH[1]}" in -h|--help|-V|--version) ;; *) printf "ignored unknown flag '%s'\n" "${BASH_REMATCH[1]}" >&2 ;; esac
-      _uf_str="${_uf_str/${BASH_REMATCH[0]}/}"
+    local _uf_skip=false _fp_tmp="$str" _re_tok="${s}([^${s}]+)"
+    while [[ "$_fp_tmp" =~ $_re_tok ]]; do
+      _fp_tmp="${_fp_tmp/${BASH_REMATCH[0]}/}"
+      [[ "${BASH_REMATCH[1]}" == -* ]] && continue
+      local _nl=$'\n'
+      [[ "${_nl}${methods}" != *"${_nl}${BASH_REMATCH[1]} "* ]] && _uf_skip=true
+      break
     done
+    if [[ "$_uf_skip" == false ]]; then
+      local _uf_str="$str" _re_uf="${s}(--?[a-zA-Z][^${s}]*)"
+      while [[ "$_uf_str" =~ $_re_uf ]]; do
+        case "${BASH_REMATCH[1]}" in -h|--help|-V|--version) ;; *) printf "ignored unknown flag '%s'\n" "${BASH_REMATCH[1]}" >&2 ;; esac
+        _uf_str="${_uf_str/${BASH_REMATCH[0]}/}"
+      done
+    fi
   fi
 
   # Check required flags (skip for help/shortlist/version)

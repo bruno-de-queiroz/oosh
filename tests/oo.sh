@@ -210,6 +210,33 @@ function test-it() { echo "VERBOSE=\$VERBOSE BROKEN=\$BROKEN"; }
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: module dispatch (parent delegates to child with its own flags)
+cat > /tmp/_oosh_test_module_child.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@flag -p|--path MPATH "" dir ~ planning path
+#@flag -r|--repo MREPO "" dir ~ repository path
+#@public ~ run the child command
+function run() { echo "MPATH=\$MPATH MREPO=\$MREPO"; }
+main \$0 "\$@"
+SCRIPT
+
+cat > /tmp/_oosh_test_module_parent.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+function _call() {
+  local all=("\$@")
+  local mod="\${all[0]}"
+  if [[ "\$mod" == "child" ]]; then
+    all=("\${all[@]:1}")
+    bash /tmp/_oosh_test_module_child.sh "\${all[@]}"
+  else
+    _default_call "\$@"
+  fi
+}
+main \$0 "\$@"
+SCRIPT
+
 # Fixture: required flags + env var fallback
 cat > /tmp/_oosh_test_required.sh << SCRIPT
 #!/bin/bash
@@ -232,7 +259,8 @@ cleanup() {
        /tmp/_oosh_test_array.sh /tmp/_oosh_test_array_enum.sh \
        /tmp/_oosh_test_array_dyn.sh /tmp/_oosh_test_array_default.sh \
        /tmp/_oosh_test_escaped_quotes.sh /tmp/_oosh_test_malformed.sh \
-       /tmp/_oosh_test_required.sh
+       /tmp/_oosh_test_required.sh \
+       /tmp/_oosh_test_module_child.sh /tmp/_oosh_test_module_parent.sh
 }
 trap cleanup EXIT
 
@@ -595,6 +623,18 @@ _assert_contains "unknown flag: --vrebose warns on stderr" \
 _assert_not_contains "known flag: --verbose no warning" \
   "ignored unknown flag" \
   "$(bash /tmp/_oosh_test_flags.sh --verbose test-bool 2>&1)"
+
+_assert_not_contains "module dispatch: parent does not warn about child flags" \
+  "ignored unknown flag" \
+  "$(bash /tmp/_oosh_test_module_parent.sh child run -p /tmp -r /tmp 2>&1)"
+
+_assert "module dispatch: child receives and parses flags" \
+  "MPATH=/tmp MREPO=/tmp" \
+  "$(bash /tmp/_oosh_test_module_parent.sh child run -p /tmp -r /tmp 2>&1)"
+
+_assert_contains "module dispatch: parent still warns for own unknown flags" \
+  "ignored unknown flag '--typo'" \
+  "$(bash /tmp/_oosh_test_flags.sh --typo test-bool 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Malformed annotations \033[0m\n\n"
