@@ -259,6 +259,10 @@ function cli() {
   for i in \${PROFILES[@]}; do
     _write_to_profile \$i "export ${NAME_UPPER}_DIR=${OUT_DIR}"
     _write_to_profile \$i "export ${NAME_UPPER}_PATH=\$binDir"
+    if [[ "\$i" == *".zshrc" ]]; then
+      _write_to_profile \$i "autoload -Uz compinit && compinit"
+      _write_to_profile \$i "autoload -Uz bashcompinit && bashcompinit"
+    fi
     _write_to_profile \$i "[[ -f ${OUT_DIR}/${NAME}.comp.sh ]] && . ${OUT_DIR}/${NAME}.comp.sh"
   done
 

@@ -222,13 +222,15 @@ These delegate to `_default_shortlist`, `_default_help`, and `_default_call` for
 
 ## ⌨️ Autocompletion
 
-Tab-completion works out of the box! The completion script (`<name>.comp.sh`) calls `<name> shortlist <words...>` to figure out what to suggest at the current cursor position.
+Tab-completion works out of the box in **bash** and **zsh**! The completion script (`<name>.comp.sh`) calls `<name> shortlist <words...>` to figure out what to suggest at the current cursor position.
 
 Special markers:
 - `__file__` -- triggers file completion
 - `__dir__` -- triggers directory completion
 
 These are returned automatically when a flag is declared with the `file` or `dir` type. Enum flags return their allowed values directly (static values or the output of a dynamic function). No extra wiring needed. 🪄
+
+**zsh support**: The installer automatically sets up `compinit` and `bashcompinit` in `~/.zshrc` (only if the file exists), which lets zsh understand the bash completion script natively. No extra dependencies — `bashcompinit` ships with zsh.
 
 ### 📦 Installation
 
@@ -243,6 +245,7 @@ This will:
 - Find a bash completion dir (`/opt/homebrew/etc/bash_completion.d`, `/usr/local/etc/bash_completion.d`, `/etc/bash_completion.d`, `/usr/share/bash-completion/completions`) -- falls back to `~/.bash_completion.d/` with profile sourcing
 - Symlink `<name>.sh` and `<name>.comp.sh` into those directories
 - Add `<NAME>_DIR`, `<NAME>_PATH` exports and completion sourcing to `~/.bashrc` and `~/.zshrc`
+- Set up `compinit` + `bashcompinit` in `~/.zshrc` for zsh completion support (skipped if already present)
 
 And when you're done? `<name> uninstall` cleans everything up. No leftovers. 🧹
 
