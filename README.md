@@ -8,6 +8,10 @@ Sprinkle some annotations on your functions and get help text, autocompletion, a
 
 **~45 lines of annotations replace ~130 lines of manual flag parsing, case statements, help text, and completion logic — for 6-17ms overhead on macOS, 6-9ms on Linux.**
 
+<p align="center">
+  <video src="https://github.com/bruno-de-queiroz/oosh/raw/main/demo.mp4" width="100%" autoplay loop muted playsinline></video>
+</p>
+
 ## 🚀 Quick start
 
 ```bash
