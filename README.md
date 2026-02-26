@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="oosh.png" alt="oosh" width="300" />
+  <video src="https://github.com/bruno-de-queiroz/oosh/raw/main/demo.mp4" width="100%" autoplay loop muted playsinline></video>
 </p>
 
 An annotation-driven bash CLI framework with a built-in generator. ✨
@@ -7,10 +7,6 @@ An annotation-driven bash CLI framework with a built-in generator. ✨
 Sprinkle some annotations on your functions and get help text, autocompletion, and flag parsing **for free**. Supports bash 3.2+ (macOS & Linux) -- no exotic dependencies, just good ol' bash. 🐚
 
 **~45 lines of annotations replace ~130 lines of manual flag parsing, case statements, help text, and completion logic — for 6-17ms overhead on macOS, 6-9ms on Linux.**
-
-<p align="center">
-  <video src="https://github.com/bruno-de-queiroz/oosh/raw/main/demo.mp4" width="100%" autoplay loop muted playsinline></video>
-</p>
 
 ## 🚀 Quick start
 
