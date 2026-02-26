@@ -237,6 +237,16 @@ function _call() {
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: -- stop-parsing
+cat > /tmp/_oosh_test_doubledash.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@flag -v|--verbose VERBOSE "false" boolean ~ enable verbose
+#@public ~ test double dash
+function test-dd() { echo "VERBOSE=\$VERBOSE ARGS=\$*"; }
+main \$0 "\$@"
+SCRIPT
+
 # Fixture: required flags + env var fallback
 cat > /tmp/_oosh_test_required.sh << SCRIPT
 #!/bin/bash
@@ -260,7 +270,8 @@ cleanup() {
        /tmp/_oosh_test_array_dyn.sh /tmp/_oosh_test_array_default.sh \
        /tmp/_oosh_test_escaped_quotes.sh /tmp/_oosh_test_malformed.sh \
        /tmp/_oosh_test_required.sh \
-       /tmp/_oosh_test_module_child.sh /tmp/_oosh_test_module_parent.sh
+       /tmp/_oosh_test_module_child.sh /tmp/_oosh_test_module_parent.sh \
+       /tmp/_oosh_test_doubledash.sh
 }
 trap cleanup EXIT
 
@@ -635,6 +646,29 @@ _assert "module dispatch: child receives and parses flags" \
 _assert_contains "module dispatch: parent still warns for own unknown flags" \
   "ignored unknown flag '--typo'" \
   "$(bash /tmp/_oosh_test_flags.sh --typo test-bool 2>&1)"
+
+# ============================================================
+printf "\n\033[1m -- stop-parsing \033[0m\n\n"
+
+_assert_not_contains "-- stops flag parsing: args after -- not warned" \
+  "ignored unknown flag" \
+  "$(bash /tmp/_oosh_test_doubledash.sh test-dd -- --not-a-flag 2>&1)"
+
+_assert_contains "-- stops flag parsing: flags before -- still parsed" \
+  "VERBOSE=true" \
+  "$(bash /tmp/_oosh_test_doubledash.sh --verbose test-dd -- --not-a-flag 2>&1)"
+
+_assert_contains "-- stops flag parsing: positionals passed through" \
+  "ARGS=--not-a-flag extra" \
+  "$(bash /tmp/_oosh_test_doubledash.sh test-dd -- --not-a-flag extra 2>&1)"
+
+_assert_not_contains "-- at end of args: stripped cleanly" \
+  "--" \
+  "$(bash /tmp/_oosh_test_doubledash.sh --verbose test-dd -- 2>&1)"
+
+_assert_not_contains "-- bare marker not passed to function" \
+  "ARGS=-- " \
+  "$(bash /tmp/_oosh_test_doubledash.sh test-dd -- --not-a-flag 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Malformed annotations \033[0m\n\n"

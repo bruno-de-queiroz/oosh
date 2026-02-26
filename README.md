@@ -159,7 +159,8 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 - Default value in double quotes (empty string = no default). Escaped quotes supported: `"say \"hello\""`
 - Optional description after `~` separator (or use `#@description` on the next line)
 - Function declarations work with or without the `function` keyword (`deploy() {` and `function deploy()` are both discovered)
-- Unknown flags are reported on stderr (e.g. `ignored unknown flag '--vrebose'`) and execution continues
+- Unknown flags are reported on stderr (e.g. `ignored unknown flag '--vrebose'`) and execution continues — flags destined for a child module are not warned about in the parent
+- A bare `--` stops flag parsing: everything after it is passed through as positional args (e.g. `mytool deploy -- --literal-arg`)
 - Unknown commands show an error with help text and exit 2 (e.g. `unknown command 'foo'`)
 
 Flags are parsed from `$@` and set as shell variables. If a flag isn't provided and the variable is unset, the default kicks in.
@@ -480,6 +481,17 @@ Users can quote values or use `=` syntax:
 mytool --name "John Doe"
 mytool --name="John Doe"
 ```
+
+### Passing flag-like values as positional args
+
+Use `--` to stop flag parsing. Everything after `--` is passed through to the function as `$@`:
+
+```bash
+mytool run -- --not-a-flag -x something
+# $@ in run() receives: --not-a-flag -x something
+```
+
+The `--` itself is consumed and not passed through.
 
 ### Default that references another variable
 

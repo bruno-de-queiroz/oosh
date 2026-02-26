@@ -19,7 +19,7 @@
 #   main $0 "$@"
 #
 
-OO_VERSION="1.2.1"
+OO_VERSION="1.3.0"
 
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
@@ -106,34 +106,32 @@ _default_shortlist() {
 
 _default_help() {
   local name="${_B}${GLOBAL_PREFIX}$(basename "${GLOBAL_SCRIPT//.sh/}")${_RST}"
-  local _methods="" _flags="" _has_module_flags=false
+  local _methods="" _flags="" _flag_details=""
   if [[ -n "$GLOBAL_METHODS" ]]; then
     while IFS= read -r _ml; do
       [[ -n "$_ml" ]] && _methods+="${_ml%% *} "
     done <<< "$GLOBAL_METHODS"
   fi
+  # Single pass: collect usage-line short names + formatted detail lines
   if [[ -n "$GLOBAL_FLAGS" ]]; then
     while IFS= read -r _fl; do
       [[ -z "$_fl" || "$_fl" != -* ]] && continue
       local _fn="${_fl%% *}"; _flags+="${_fn%%|*} "
+      local _fr="${_fl#* }"; _fr="${_fr#"${_fr%%[![:space:]]*}"}"
+      _flag_details+="$(printf "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}" "$_fn" "$_fr")"$'\n'
     done <<< "$GLOBAL_FLAGS"
   fi
 
   printf "\n  ${_DIM}Usage:${_RST} ${name} ${_CY}[ ${_methods}help ]${_RST}"
   if [[ -n "$GLOBAL_FLAGS" ]]; then
     [[ -n "$_flags" ]] && printf " ${_YL}[ ${_flags}]${_RST}\n" || printf "\n"
-    if [[ -n "$GLOBAL_FLAGS" ]]; then
-      while IFS= read -r line; do
-        [[ -z "$line" || "$line" != -* ]] && continue
-        if [[ "$_has_module_flags" == false ]]; then
-          printf "\n  ${_B}Flags:${_RST}\n"; _has_module_flags=true
-        fi
-        local flag="${line%% *}" rest="${line#* }"
-        rest="${rest#"${rest%%[![:space:]]*}"}"
-        printf "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}\n" "$flag" "$rest"
-      done <<< "$GLOBAL_FLAGS"
+    if [[ -n "$_flag_details" ]]; then
+      printf "\n  ${_B}Flags:${_RST}\n"
+      printf "%s" "$_flag_details"
+      echo ""
+    else
+      printf "\n"
     fi
-    [[ "$_has_module_flags" == true ]] && echo "" || printf "\n"
   else
     printf "\n\n"
   fi
@@ -245,6 +243,16 @@ main() {
   local mf_help="" mf_file="" mf_dir="" mf_enum=""
   local _oo_array_vars=""
   local _missing_required=""
+
+  # Handle -- stop-parsing separator: strip post-"--" args so flag
+  # extraction and unknown-flag warnings skip them. Rejoined before dispatch.
+  local _post_dd=""
+  if [[ "$str" == *"${s}--${s}"* ]]; then
+    _post_dd="${s}${str#*${s}--${s}}"
+    str="${str%%${s}--${s}*}"
+  elif [[ "$str" == *"${s}--" ]]; then
+    str="${str%${s}--}"
+  fi
 
   # Regex patterns stored in variables for bash 3.2 compatibility
   local _re_enum_dyn='^enum\(\$\{([^}]+)\}\)$'
@@ -502,6 +510,9 @@ main() {
       *) _die "missing required flag: ${_missing_required% }" ;;
     esac
   fi
+
+  # Rejoin post-"--" positional args before dispatch
+  str="${str}${_post_dd}"
 
   str="${str#${s}}"
 
