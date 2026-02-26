@@ -1,5 +1,5 @@
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/04f647fa-f5c1-46ac-a64e-5cf4d5896c20" width="100%" autoplay loop muted playsinline></video>
+  <video src="https://github.com/user-attachments/assets/216d82ae-2bc2-418c-bb75-d2b2e8614cc7" width="100%" autoplay loop muted playsinline></video>
 </p>
 
 An annotation-driven bash CLI framework with a built-in generator. ✨
