@@ -251,13 +251,13 @@ SCRIPT
 cat > /tmp/_oosh_test_required.sh << SCRIPT
 #!/bin/bash
 . ${OOSH_DIR}/oo.sh
-#@flag -k|--key KEY "" required ~ api key
-#@flag -p|--port PORT "" required:number ~ server port
-#@flag -n|--name NAME "\${TEST_OOSH_NAME}" ~ name with env fallback
-#@flag -e|--env ENV "\${TEST_OOSH_ENV}" required ~ required with env fallback
-#@flag -l|--lang LANG_CODE "\${TEST_OOSH_LANG:-en}" ~ env var with inline fallback
+#@flag -k|--key REQ_KEY "" required ~ api key
+#@flag -p|--port REQ_PORT "" required:number ~ server port
+#@flag -n|--name REQ_NAME "\${TEST_OOSH_NAME}" ~ name with env fallback
+#@flag -e|--env REQ_ENV "\${TEST_OOSH_ENV}" required ~ required with env fallback
+#@flag -l|--lang REQ_LANG "\${TEST_OOSH_LANG:-en}" ~ env var with inline fallback
 #@public ~ test required flags
-function test-it() { echo "KEY=\$KEY PORT=\$PORT NAME=\$NAME ENV=\$ENV LANG_CODE=\$LANG_CODE"; }
+function test-it() { echo "KEY=\$REQ_KEY PORT=\$REQ_PORT NAME=\$REQ_NAME ENV=\$REQ_ENV LANG_CODE=\$REQ_LANG"; }
 main \$0 "\$@"
 SCRIPT
 
