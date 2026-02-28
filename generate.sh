@@ -161,6 +161,22 @@ complete -o filenames -F _${NAME} ${NAME}
 COMP
 _step "${NAME}.comp.sh" "bash completion"
 
+# --- native zsh completion (<name>.zcomp.sh) ---
+cat > "${OUT_DIR}/${NAME}.zcomp.sh" <<ZCOMP
+_${NAME}() {
+  local src opts
+  src="\${${NAME_UPPER}_PATH}/${NAME}"
+  opts=\$("\$src" shortlist "\${(@)words[2,\$((CURRENT-1))]}" 2>/dev/null)
+  case "\$opts" in
+    __file__) _files ;;
+    __dir__)  _files -/ ;;
+    *)        [[ -n "\$opts" ]] && compadd -- \${=opts} ;;
+  esac
+}
+compdef _${NAME} ${NAME}
+ZCOMP
+_step "${NAME}.zcomp.sh" "zsh completion"
+
 # --- sample module (hello.sh) ---
 cat > "${OUT_DIR}/modules/hello.sh" <<'MODULE'
 #!/bin/bash
@@ -261,9 +277,10 @@ function cli() {
     _write_to_profile \$i "export ${NAME_UPPER}_PATH=\$binDir"
     if [[ "\$i" == *".zshrc" ]]; then
       _write_to_profile \$i "autoload -Uz compinit && compinit"
-      _write_to_profile \$i "autoload -Uz bashcompinit && bashcompinit"
+      _write_to_profile \$i "[[ -f ${OUT_DIR}/${NAME}.zcomp.sh ]] && source ${OUT_DIR}/${NAME}.zcomp.sh"
+    else
+      _write_to_profile \$i "[[ -f ${OUT_DIR}/${NAME}.comp.sh ]] && . ${OUT_DIR}/${NAME}.comp.sh"
     fi
-    _write_to_profile \$i "[[ -f ${OUT_DIR}/${NAME}.comp.sh ]] && . ${OUT_DIR}/${NAME}.comp.sh"
   done
 
   _info "${NAME} installed successfully"
@@ -314,6 +331,7 @@ function cli() {
     _remove_from_profile \$i "export ${NAME_UPPER}_DIR="
     _remove_from_profile \$i "export ${NAME_UPPER}_PATH="
     _remove_from_profile \$i "${OUT_DIR}/${NAME}.comp.sh"
+    _remove_from_profile \$i "${OUT_DIR}/${NAME}.zcomp.sh"
   done
 
   # remove tool directory

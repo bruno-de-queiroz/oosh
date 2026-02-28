@@ -38,6 +38,7 @@ Drop more `.sh` files into `modules/` and they're auto-discovered. That's it. Go
   oo.sh                  framework engine
   mytool.sh              entry point
   mytool.comp.sh         bash completion
+  mytool.zcomp.sh        zsh completion
   modules/hello.sh       sample module
   modules/install.sh     CLI installer
   modules/uninstall.sh   CLI uninstaller
@@ -223,7 +224,7 @@ These delegate to `_default_shortlist`, `_default_help`, and `_default_call` for
 
 ## ⌨️ Autocompletion
 
-Tab-completion works out of the box in **bash** and **zsh**! The completion script (`<name>.comp.sh`) calls `<name> shortlist <words...>` to figure out what to suggest at the current cursor position.
+Tab-completion works out of the box in **bash** and **zsh**! Both completion scripts call `<name> shortlist <words...>` to figure out what to suggest at the current cursor position.
 
 Special markers:
 - `__file__` -- triggers file completion
@@ -231,7 +232,9 @@ Special markers:
 
 These are returned automatically when a flag is declared with the `file` or `dir` type. Enum flags return their allowed values directly (static values or the output of a dynamic function). No extra wiring needed. 🪄
 
-**zsh support**: The installer automatically sets up `compinit` and `bashcompinit` in `~/.zshrc` (only if the file exists), which lets zsh understand the bash completion script natively. No extra dependencies — `bashcompinit` ships with zsh.
+**bash** uses `<name>.comp.sh` — registered via `complete -F` and sourced from `~/.bashrc`.
+
+**zsh** uses `<name>.zcomp.sh` — a native zsh completion function using `compdef` and `compadd`, sourced from `~/.zshrc` after `compinit`. No `bashcompinit` required.
 
 ### 📦 Installation
 
@@ -246,7 +249,7 @@ This will:
 - Find a bash completion dir (`/opt/homebrew/etc/bash_completion.d`, `/usr/local/etc/bash_completion.d`, `/etc/bash_completion.d`, `/usr/share/bash-completion/completions`) -- falls back to `~/.bash_completion.d/` with profile sourcing
 - Symlink `<name>.sh` and `<name>.comp.sh` into those directories
 - Add `<NAME>_DIR`, `<NAME>_PATH` exports and completion sourcing to `~/.bashrc` and `~/.zshrc`
-- Set up `compinit` + `bashcompinit` in `~/.zshrc` for zsh completion support (skipped if already present)
+- Sources `<name>.comp.sh` (bash) or `<name>.zcomp.sh` (zsh) from the appropriate profile — zsh gets native completion via `compdef`, no `bashcompinit` needed
 
 And when you're done? `<name> uninstall` cleans everything up. No leftovers. 🧹
 
@@ -363,6 +366,7 @@ Generated structure:
 <name>/
 ├── <name>.sh        # Entry point
 ├── <name>.comp.sh   # Bash completion
+├── <name>.zcomp.sh  # Zsh completion (native, no bashcompinit)
 ├── oo.sh            # Framework engine
 └── modules/
     ├── hello.sh       # Sample module

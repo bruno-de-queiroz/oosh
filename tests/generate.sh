@@ -20,8 +20,11 @@ printf "\n\033[1m Generator: scaffolding \033[0m\n\n"
 _assert "creates entry point" "true" \
   "$([[ -f "${_GEN_CLI}/_testcli.sh" ]] && echo true || echo false)"
 
-_assert "creates completion script" "true" \
+_assert "creates bash completion script" "true" \
   "$([[ -f "${_GEN_CLI}/_testcli.comp.sh" ]] && echo true || echo false)"
+
+_assert "creates zsh completion script" "true" \
+  "$([[ -f "${_GEN_CLI}/_testcli.zcomp.sh" ]] && echo true || echo false)"
 
 _assert "copies oo.sh" "true" \
   "$([[ -f "${_GEN_CLI}/oo.sh" ]] && echo true || echo false)"
