@@ -8,6 +8,7 @@
 set -euo pipefail
 
 OOSH_REPO="${OOSH_REPO:-https://raw.githubusercontent.com/bruno-de-queiroz/oosh/main}"
+[[ "$OOSH_REPO" =~ ^https:// ]] || { printf "error: OOSH_REPO must use https://\n" >&2; exit 1; }
 OOSH_HOME="${HOME}/.oosh"
 
 # --- colors (respect NO_COLOR) ---

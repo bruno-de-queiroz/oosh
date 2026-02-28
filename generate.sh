@@ -39,6 +39,7 @@ OOSH_DIR="$(cd "$(dirname "$(_resolve "$0")")" && pwd)"
 [[ $# -lt 1 ]] && { printf "\n  ${B}Usage:${RST} $0 ${CY}<name>${RST} ${DIM}[--no-color] [output-dir]${RST}\n\n"; exit 1; }
 
 NAME="$1"
+[[ "$NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || { printf "  error: name must match [a-zA-Z_][a-zA-Z0-9_-]*\n" >&2; exit 1; }
 NAME_UPPER="$(echo "$NAME" | tr '[:lower:]' '[:upper:]')"
 [[ -n "${2:-}" ]] && OUT_DIR="${2}/${NAME}" || OUT_DIR="${HOME}/.${NAME}"
 
@@ -121,7 +122,7 @@ function _call() {
   local all=("\$@")
   local module="\${all[0]}"
 
-  if [[ -f "\${MODULES_DIR}/\${module}.sh" ]]; then
+  if [[ "\$module" =~ ^[a-zA-Z0-9_-]+\$ && -f "\${MODULES_DIR}/\${module}.sh" ]]; then
     all=("\${all[@]:1}")
     "\${MODULES_DIR}/\${module}.sh" "\${all[@]}"
   else

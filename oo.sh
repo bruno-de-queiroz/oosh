@@ -19,7 +19,7 @@
 #   main $0 "$@"
 #
 
-OO_VERSION="1.4.0"
+OO_VERSION="1.4.1"
 
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
@@ -43,7 +43,7 @@ fi
 # --- utilities ---
 _requires()            { [[ -n "$(command -v "$1")" ]] || { _error "$1 is not installed, please install $1 first"; exit 1; }; }
 _write_to_profile()    { local f="$1"; shift; [[ -f "$f" ]] && ! grep -qF "$*" "$f" && echo "$*" >> "$f"; }
-_remove_from_profile() { local f="$1"; shift; [[ -f "$f" ]] && grep -vF "$*" "$f" > "$f.tmp" && mv "$f.tmp" "$f"; }
+_remove_from_profile() { local f="$1"; shift; if [[ -f "$f" ]]; then local _t; _t="$(mktemp)" && grep -vF "$*" "$f" > "$_t" && mv "$_t" "$f" || rm -f "$_t"; fi; }
 _info()  { printf "  ${_GR}✔${_RST}  %s\n" "$*"; }
 _error() { printf "  ${_RD}✘${_RST}  %s\n" "$*" >&2; }
 _die()   { _error "$*"; exit 2; }
@@ -54,7 +54,8 @@ _resolve_enum() {
   if [[ "$_el" == *" ${_key}="* ]]; then
     local _tmp="${_el#* ${_key}=}"; _tmp="${_tmp%% *}"
     if [[ "$_tmp" =~ $_re_dyn ]]; then
-      "${BASH_REMATCH[1]}" 2>/dev/null
+      local _fn="${BASH_REMATCH[1]}"
+      [[ "$_fn" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && "${_fn}" 2>/dev/null
     else
       echo "${_tmp//,/ }"
     fi
@@ -266,6 +267,7 @@ main() {
   # Flush pending flag: build help string + extract value from args
   _flush_flag() {
     [[ -z "$p_flag" ]] && return
+    case "$p_var" in PATH|IFS|HOME|USER|SHELL|UID|EUID|PPID|PWD|OLDPWD|GLOBAL_*|_SL_*) return ;; esac
     # Detect required modifier and strip from type
     local _required=false
     case "$p_ftype" in
@@ -296,6 +298,7 @@ main() {
     local _enum_vals="" _enum_dynamic="" _enum_store=""
     if [[ "$_effective_type" =~ $_re_enum_dyn ]]; then
       _enum_dynamic="${BASH_REMATCH[1]}"
+      [[ "$_enum_dynamic" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || _enum_dynamic=""
       _enum_store='${'"${_enum_dynamic}"'}'
     elif [[ "$_effective_type" =~ $_re_enum_static ]]; then
       _enum_vals="${BASH_REMATCH[1]}"

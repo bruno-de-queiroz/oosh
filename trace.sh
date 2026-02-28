@@ -32,8 +32,8 @@ TARGET=""  SCOPE_MOD=""  SCOPE_CMD=""  THRESHOLD=150  RUNS=5  MAX_ITEMS=20
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -t) THRESHOLD="${2:-}"; [[ -z "$THRESHOLD" ]] && _fail "-t requires a value"; shift 2 ;;
-    -r) RUNS="${2:-}"; [[ -z "$RUNS" ]] && _fail "-r requires a value"; shift 2 ;;
+    -t) THRESHOLD="${2:-}"; [[ "$THRESHOLD" =~ ^[1-9][0-9]*$ ]] || _fail "-t requires a positive integer"; shift 2 ;;
+    -r) RUNS="${2:-}"; [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || _fail "-r requires a positive integer"; shift 2 ;;
     *)
       if [[ -z "$TARGET" ]]; then TARGET="$1"
       elif [[ -z "$SCOPE_MOD" ]]; then SCOPE_MOD="$1"
@@ -148,7 +148,7 @@ _SCOPE_LABEL=""
 [[ -n "$SCOPE_CMD" ]] && _SCOPE_LABEL="$_SCOPE_LABEL $SCOPE_CMD"
 
 # --- helpers ---
-_WORDS_TMP="${TMPDIR:-/tmp}/_oosh_trace_$$"
+_WORDS_TMP="$(mktemp "${TMPDIR:-/tmp}/_oosh_trace_XXXXXX")"
 trap 'rm -f "$_WORDS_TMP"' EXIT
 
 _get_words() { _run shortlist "$@" 2>/dev/null | tr ' ' '\n' | grep -v '^$' || true; }
