@@ -684,6 +684,17 @@ _assert_contains "malformed #@flag: valid flag still works" \
 # ============================================================
 printf "\n\033[1m Unknown command \033[0m\n\n"
 
+_assert_exit "zero args: exits 0 (shows help)" 0 \
+  bash /tmp/_oosh_test_flags.sh
+
+_assert_contains "zero args: shows help output" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_flags.sh 2>&1)"
+
+_assert_not_contains "zero args: no error message" \
+  "unknown command" \
+  "$(bash /tmp/_oosh_test_flags.sh 2>&1)"
+
 _assert_exit "unknown command: exits 2" 2 \
   bash /tmp/_oosh_test_flags.sh nonexistent
 

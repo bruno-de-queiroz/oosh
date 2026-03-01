@@ -224,6 +224,7 @@ _default_call() {
         _help
       fi ;;
     version|--version|-V) _version ;;
+    "")                   _help ;;
     *)                    _error "unknown command '${first}'"; _help; exit 2 ;;
   esac
 }
