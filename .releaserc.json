@@ -1,0 +1,15 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", {
+      "prepareCmd": "sed -i 's/OO_VERSION=\"[^\"]*\"/OO_VERSION=\"${nextRelease.version}\"/' oo.sh"
+    }],
+    ["@semantic-release/git", {
+      "assets": ["oo.sh"],
+      "message": "chore: bump version to ${nextRelease.version} [skip ci]"
+    }],
+    "@semantic-release/github"
+  ]
+}

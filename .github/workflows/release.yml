@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - '.releaserc.json'
+      - '*.md'
+      - 'docs/**'
+      - '.gitignore'
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests
+        run: bash tests/run.sh
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: |
+      github.actor != 'dependabot[bot]' &&
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !startsWith(github.event.head_commit.message, 'chore')
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install semantic-release
+        run: npm i -g semantic-release @semantic-release/exec @semantic-release/git @semantic-release/github
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: semantic-release
