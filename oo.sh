@@ -19,7 +19,7 @@
 #   main $0 "$@"
 #
 
-OO_VERSION="1.4.1"
+OO_VERSION="1.4.2"
 
 GLOBAL_SCRIPT=""
 GLOBAL_METHODS=""
