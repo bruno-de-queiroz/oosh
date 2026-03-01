@@ -12,6 +12,7 @@ mkdir -p "$_FIX_DIR"
 # Valid clean script (filename: deploy.sh → prefix DEPLOY_)
 cat > "${_FIX_DIR}/deploy.sh" << SCRIPT
 #!/bin/bash
+#@module Deploy ~ deploy and run the app
 . ${OOSH_DIR}/oo.sh
 
 #@flag -v|--verbose DEPLOY_VERBOSE "false" boolean ~ enable verbose output
@@ -122,15 +123,18 @@ SCRIPT
 # Legacy #@description suppresses warning (filename: legacydesc.sh → prefix LEGACYDESC_)
 cat > "${_FIX_DIR}/legacydesc.sh" << SCRIPT
 #!/bin/bash
+#@module Legacydesc ~ legacy description test
 #@flag -v|--verbose LEGACYDESC_VERBOSE "false" boolean
 #@description enable verbose output
 #@public ~ test
 function test-it() { echo "ok"; }
+main \$0 "\$@"
 SCRIPT
 
 # Valid enum types (filename: types.sh → prefix TYPES_)
 cat > "${_FIX_DIR}/types.sh" << SCRIPT
 #!/bin/bash
+#@module Types ~ valid types test
 #@flag -e|--env TYPES_ENVIRONMENT "prod" enum(dev,staging,prod) ~ environment
 #@flag -f|--file TYPES_CONFIG "" file ~ config file
 #@flag -d|--dir TYPES_OUTPUT "" dir ~ output dir
@@ -140,6 +144,7 @@ cat > "${_FIX_DIR}/types.sh" << SCRIPT
 #@flag -r|--regions TYPES_REGIONS "" array(enum(us,eu,ap)) ~ regions
 #@public ~ test
 function test-it() { echo "ok"; }
+main \$0 "\$@"
 SCRIPT
 
 # Missing prefix (filename: hello.sh → prefix HELLO_, but uses bare VERBOSE)
@@ -262,12 +267,14 @@ _assert "lint: --no-color strips ANSI" "0" "$_has_ansi"
 # --- --fix: prefix rename ---
 cat > "${_FIX_DIR}/fixme.sh" << SCRIPT
 #!/bin/bash
+#@module Fixme ~ fix test module
 #@flag -v|--verbose VERBOSE "false" boolean ~ unprefixed var
 #@flag -n|--name NAME "world"
 #@public ~ say hello
 function greet() {
   echo "Hello, \${NAME}! verbose=\$VERBOSE"
 }
+main \$0 "\$@"
 SCRIPT
 _out=$(bash "${OOSH_DIR}/lint.sh" --fix --no-color "${_FIX_DIR}/fixme.sh" 2>&1) && _rc=$? || _rc=$?
 _assert_contains "lint: --fix renames vars" "VERBOSE → FIXME_VERBOSE" "$_out"
@@ -357,6 +364,33 @@ SCRIPT
 _out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/required_env.sh" 2>&1) && _rc=$? || _rc=$?
 _assert "lint: required with env var default exits 0" "0" "$_rc"
 _assert_not_contains "lint: required with env var default no contradictory warning" "required check will never trigger" "$_out"
+
+# --- missing #@module warning ---
+cat > "${_FIX_DIR}/nomodule.sh" << SCRIPT
+#!/bin/bash
+#@public ~ test
+function test-it() { echo "ok"; }
+main \$0 "\$@"
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/nomodule.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: missing #@module exits 0 (warning)" "0" "$_rc"
+_assert_contains "lint: missing #@module warns" "missing #@module annotation" "$_out"
+
+# --- missing main $0 "$@" warning ---
+cat > "${_FIX_DIR}/nomain.sh" << SCRIPT
+#!/bin/bash
+#@module Nomain ~ no main call
+#@public ~ test
+function test-it() { echo "ok"; }
+SCRIPT
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/nomain.sh" 2>&1) && _rc=$? || _rc=$?
+_assert "lint: missing main exits 0 (warning)" "0" "$_rc"
+_assert_contains "lint: missing main warns" 'missing or misplaced main' "$_out"
+
+# --- both present: no warnings for these checks ---
+_out=$(bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/deploy.sh" 2>&1)
+_assert_not_contains "lint: #@module present: no module warning" "missing #@module" "$_out"
+_assert_not_contains "lint: main present: no main warning" "missing or misplaced main" "$_out"
 
 # --- performance ---
 _assert_perf "lint: single file <200ms" 200 bash "${OOSH_DIR}/lint.sh" --no-color "${_FIX_DIR}/deploy.sh"

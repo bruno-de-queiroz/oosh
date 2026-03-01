@@ -367,8 +367,10 @@ main() {
     local _val="${!p_var}"
     if [[ "$_is_array" == true ]]; then
       if [[ -n "$_enum_dynamic" && "$_was_set" == true && -n "$_val" ]]; then
-        _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
-        _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
+        _enum_vals=""
+        while IFS= read -r _ev; do
+          [[ -n "$_ev" ]] && _enum_vals="${_enum_vals:+${_enum_vals},}${_ev}"
+        done < <("$_enum_dynamic" 2>/dev/null)
       fi
       if [[ -n "$_enum_vals" && -n "$_val" ]]; then
         local _old_ifs="$IFS"; IFS=$'\x1E'; local _elems=($_val); IFS="$_old_ifs"
@@ -378,8 +380,10 @@ main() {
       fi
     else
       if [[ -n "$_enum_dynamic" && "$_was_set" == true && -n "$_val" ]]; then
-        _enum_vals=$("$_enum_dynamic" 2>/dev/null | tr '\n' ' ')
-        _enum_vals="${_enum_vals% }"; _enum_vals="${_enum_vals// /,}"
+        _enum_vals=""
+        while IFS= read -r _ev; do
+          [[ -n "$_ev" ]] && _enum_vals="${_enum_vals:+${_enum_vals},}${_ev}"
+        done < <("$_enum_dynamic" 2>/dev/null)
       fi
       if [[ -n "$_enum_vals" && -n "$_val" ]]; then
         [[ ",${_enum_vals}," == *",${_val},"* ]] || _die "invalid value '${_val}' for $p_flag (expected: ${_enum_vals//,/, })"
@@ -520,6 +524,7 @@ main() {
   str="${str#${s}}"
 
   local _av; for _av in $_oo_array_vars; do
+    [[ -z "$_av" ]] && continue
     local _raw="${!_av}"
     if [[ -n "$_raw" ]]; then
       IFS=$'\x1E' read -ra "$_av" <<< "$_raw"

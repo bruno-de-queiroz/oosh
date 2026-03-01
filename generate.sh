@@ -110,8 +110,13 @@ function _help() {
   printf "\n  \${_B}Modules:\${_RST}\n"
   for module in \$MODULES; do
     if [[ -f "\${MODULES_DIR}/\${module}.sh" ]]; then
-      local description
-      description="\$(grep -E '^#@module' "\${MODULES_DIR}/\${module}.sh" | sed -E 's/#@module[[:space:]]*(.*)/\1/')"
+      local description="" _desc_line _pfx="#@module"
+      while IFS= read -r _desc_line; do
+        [[ "\$_desc_line" == '#@module'* ]] || continue
+        description="\${_desc_line#"\$_pfx"}"
+        description="\${description#"\${description%%[! ]*}"}"
+        break
+      done < "\${MODULES_DIR}/\${module}.sh"
       printf "  \${_MG}%-20s\${_RST} \${_DIM}%s\${_RST}\n" "\$module" "\$description"
     fi
   done

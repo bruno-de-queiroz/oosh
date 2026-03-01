@@ -146,6 +146,7 @@ _validate_file() {
   local scope="__global__"
   local pending_vis="" pending_vis_line=0
   local prev_flag_line=0 prev_flag_var="" prev_flag_fdesc=""
+  local _has_module=false _last_code_line=""
   # Track flag names within this file: "scope:flagname "
   local file_flag_names=""
   # Expected variable prefix from filename: hello.sh → HELLO_, my-tool.sh → MY_TOOL_
@@ -157,6 +158,7 @@ _validate_file() {
   while IFS= read -r line; do
     line_num=$((line_num + 1))
     local t="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "$t" && "$t" != '#'* ]] && _last_code_line="$t"
 
     # Normalize function declarations (same as oo.sh)
     local is_func=false func_name=""
@@ -269,7 +271,10 @@ _validate_file() {
           prev_flag_fdesc="${t#'#@description '}"
         fi
         ;;
-      '#@version '*|'#@module '*|'#@'*|'#'*|'')
+      '#@module'*)
+        _has_module=true
+        ;;
+      '#@version '*|'#@'*|'#'*|'')
         # Comments, blank lines, other annotations — skip
         ;;
       *)
@@ -307,6 +312,13 @@ _validate_file() {
   fi
   if [[ -n "$prev_flag_var" && -z "$prev_flag_fdesc" ]]; then
     _report_no_desc "$file" "$prev_flag_line" "$prev_flag_var"
+  fi
+  # Check for required structural elements
+  if [[ "$_has_module" == false ]]; then
+    _report_warning "$file" 0 "missing #@module annotation"
+  fi
+  if [[ "$_last_code_line" != 'main '*'"$@"' ]]; then
+    _report_warning "$file" "$line_num" 'missing or misplaced main $0 "$@" — must be the last line'
   fi
 }
 
