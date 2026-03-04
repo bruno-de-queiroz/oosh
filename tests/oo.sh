@@ -261,6 +261,25 @@ function test-it() { echo "KEY=\$REQ_KEY PORT=\$REQ_PORT NAME=\$REQ_NAME ENV=\$R
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: default function (no args calls run directly)
+cat > /tmp/_oosh_test_default.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@flag -d|--debug DEBUG "false" boolean ~ enable debug output
+#@default
+function run() { echo "DEBUG=\$DEBUG"; }
+main \$0 "\$@"
+SCRIPT
+
+# Fixture: no default specified (should show help)
+cat > /tmp/_oosh_test_no_default.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@public ~ say hi
+function greet() { echo "hi"; }
+main \$0 "\$@"
+SCRIPT
+
 cleanup() {
   rm -f /tmp/_oosh_test_flags.sh /tmp/_oosh_test_normalize.sh \
        /tmp/_oosh_test_dynamic_enum.sh /tmp/_oosh_test_compat.sh \
@@ -705,6 +724,32 @@ _assert_contains "unknown command: shows error message" \
 _assert_contains "unknown command: shows help after error" \
   "Usage:" \
   "$(bash /tmp/_oosh_test_flags.sh nonexistent 2>&1)"
+
+# ============================================================
+printf "\n\033[1m Default function \033[0m\n\n"
+
+_assert "default function called when no args passed" \
+  "DEBUG=false" \
+  "$(bash /tmp/_oosh_test_default.sh)"
+
+_assert "default function receives flag args" \
+  "DEBUG=true" \
+  "$(bash /tmp/_oosh_test_default.sh --debug)"
+
+_assert_contains "--help shows help instead of running default" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_default.sh --help 2>&1)"
+
+_assert_contains "-h shows help instead of running default" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_default.sh -h 2>&1)"
+
+# Note: protected functions are NOT added to GLOBAL_METHODS, so they can't be called by name
+# The default function runs when no args provided
+
+_assert_contains "no default specified: shows help on no args" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_no_default.sh 2>&1)"
 
 # ============================================================
 printf "\n\033[1m Required flags \033[0m\n\n"

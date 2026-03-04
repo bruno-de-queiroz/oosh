@@ -107,6 +107,7 @@ Method-scoped flags appear indented under their command:
 | `#@module Description` | Top of module file | Module description shown in help |
 | `#@public [~ description]` | Before a function | Expose as a user-facing command |
 | `#@protected [~ description]` | Before a function | Hide from help/shortlist -- still callable internally |
+| `#@default` | Before a function | Mark this function to run when no arguments provided (instead of showing help) |
 | `#@flag -s\|--long VAR "default" [type] [~ description]` | Before a function or top-level | Declare a flag with short/long form, env var, default, and optional type |
 | `#@description text` | After `#@flag` or `#@public`/`#@protected` | Legacy alternative to inline `~` descriptions |
 | `#@version x.y.z` | Top of module file | Module version shown with `--version` |

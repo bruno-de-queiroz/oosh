@@ -26,6 +26,7 @@ GLOBAL_METHODS=""
 GLOBAL_FLAGS=""
 GLOBAL_PREFIX=""
 GLOBAL_VERSION=""
+GLOBAL_DEFAULT="_help"
 _SL_FILE_FLAGS=""
 _SL_DIR_FLAGS=""
 _SL_ENUM=""
@@ -200,6 +201,7 @@ _default_command_help() {
   echo ""
 }
 
+
 _default_version() {
   local name="$(basename "${GLOBAL_SCRIPT//.sh/}")"
   [[ -n "$GLOBAL_VERSION" ]] && printf "%s %s " "$name" "$GLOBAL_VERSION"
@@ -224,7 +226,11 @@ _default_call() {
         _help
       fi ;;
     version|--version|-V) _version ;;
-    "")                   _help ;;
+    "")
+      local _arg; for _arg in "$@"; do
+        case "$_arg" in --help|-h) _command_help "default"; return 0 ;; esac
+      done
+      "${GLOBAL_DEFAULT}" "$@"; exit 0 ;;
     *)                    _error "unknown command '${first}'"; _help; exit 2 ;;
   esac
 }
@@ -243,6 +249,8 @@ main() {
   local flags="" methods="" file_flags="" dir_flags="" enum_flags="" version=""
   local p_vis="" p_desc="" p_flag="" p_var="" p_def="" p_fdesc="" p_ftype=""
   local mf_help="" mf_file="" mf_dir="" mf_enum=""
+  local _default_func=""
+  local _p_default=false     # flag to mark next function as default
   local _oo_array_vars=""
   local _missing_required=""
 
@@ -440,6 +448,8 @@ main() {
         _flush_flag
         [[ "$t" == '#@public'* ]] && p_vis=public || p_vis=protected
         [[ "$t" =~ ~[[:space:]]+(.*) ]] && p_desc="${BASH_REMATCH[1]}" ;;
+      '#@default'*)
+        _flush_flag; _p_default=true ;;
       '#@flag '*)
         _flush_flag
         if [[ "$t" =~ $_re_flag ]]; then
@@ -454,8 +464,12 @@ main() {
       '#@'*|'#'*|'') ;;
       'function '*)
         _flush_flag
-        if [[ "$t" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) && -n "$p_vis" ]]; then
+        if [[ "$t" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) && (-n "$p_vis" || "$_p_default" == true) ]]; then
           local fname="${BASH_REMATCH[1]}"
+          if [[ "$_p_default" == true ]]; then
+            _default_func="$fname"
+            _p_default=false
+          fi
           if [[ "$p_vis" == public ]]; then
             [[ -n "$methods" ]] && methods+=$'\n'
             methods+="$(printf '%-20s %s' "$fname" "$p_desc")"
@@ -485,6 +499,7 @@ main() {
   GLOBAL_FLAGS="$flags"
   GLOBAL_METHODS="$methods"
   GLOBAL_VERSION="$version"
+  GLOBAL_DEFAULT="${_default_func:-$GLOBAL_DEFAULT}"
   _SL_FILE_FLAGS="$file_flags"
   _SL_DIR_FLAGS="$dir_flags"
   _SL_ENUM="$enum_flags"
