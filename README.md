@@ -129,7 +129,7 @@ Built-in commands: `help` / `--help` / `-h` show help, `version` / `--version` /
 
 #@flag -p|--port DEPLOY_PORT "8080" number ~ validated as numeric
 
-#@flag -e|--env DEPLOY_ENVIRONMENT "production" enum(dev,staging,prod) ~ validated against allowed values
+#@flag -e|--env DEPLOY_ENVIRONMENT "prod" enum(dev,staging,prod) ~ validated against allowed values
 
 #@flag -b|--branch DEPLOY_BRANCH "" enum(${_get_branches}) ~ dynamic enum resolved by calling a function
 
@@ -194,7 +194,7 @@ Priority: explicit flag > env var > inline fallback > empty
 #@flag -v|--verbose MYMODULE_VERBOSE "false" boolean ~ enable verbose output
 
 #@public ~ deploy the app
-#@flag -e|--env MYMODULE_ENVIRONMENT "production" enum(dev,staging,prod) ~ target environment
+#@flag -e|--env MYMODULE_ENVIRONMENT "prod" enum(dev,staging,prod) ~ target environment
 function deploy() {
   echo "Deploying to ${MYMODULE_ENVIRONMENT}..."
 }
@@ -614,15 +614,15 @@ oosh parses annotations at runtime — no compilation, no caching. The display a
 
 | Operation | bash | oosh | Overhead |
 |---|---|---|---|
-| Tab-complete: top-level | 2ms | 8ms | +6ms |
-| Tab-complete: command flags | 2ms | 8ms | +6ms |
-| Tab-complete: enum values | 2ms | 9ms | +7ms |
-| Help | 2ms | 10ms | +8ms |
-| Dispatch: simple command | 2ms | 9ms | +7ms |
-| Dispatch: enum + number flags | 2ms | 9ms | +7ms |
-| Dispatch: all flags combined | 2ms | 9ms | +7ms |
+| Tab-complete: top-level | 4ms | 7ms | +3ms |
+| Tab-complete: command flags | 4ms | 7ms | +3ms |
+| Tab-complete: enum values | 4ms | 7ms | +3ms |
+| Help | 4ms | 8ms | +4ms |
+| Dispatch: simple command | 4ms | 6ms | +2ms |
+| Dispatch: enum + number flags | 4ms | 6ms | +2ms |
+| Dispatch: all flags combined | 4ms | 6ms | +2ms |
 
-Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 6-17ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~14-16ms on macOS, ~2ms on Linux).
+Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 2-17ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~14-16ms on macOS, ~4ms on Linux).
 
 Usage errors (invalid flags, missing required flags, unknown commands) exit with code 2 following POSIX convention. Runtime errors exit with code 1.
 
