@@ -78,12 +78,24 @@ _assert_contains "hello shortlist returns commands" \
 # ============================================================
 printf "\n\033[1m Generator: update flow \033[0m\n\n"
 
-# Tamper with oo.sh to verify update replaces it
+# Tamper with all framework files to verify update replaces them
 echo "# tampered" >> "${_GEN_CLI}/oo.sh"
+echo "# tampered" >> "${_GEN_CLI}/_testcli.sh"
+echo "# tampered" >> "${_GEN_CLI}/_testcli.comp.sh"
+echo "# tampered" >> "${_GEN_CLI}/_testcli.zcomp.sh"
 printf "y" | bash "${OOSH_DIR}/generate.sh" --no-color _testcli "${_GEN_DIR}" >/dev/null 2>&1
 
 _assert "update restores oo.sh" "false" \
   "$(grep -q '# tampered' "${_GEN_CLI}/oo.sh" 2>/dev/null && echo true || echo false)"
+
+_assert "update restores entry point" "false" \
+  "$(grep -q '# tampered' "${_GEN_CLI}/_testcli.sh" 2>/dev/null && echo true || echo false)"
+
+_assert "update restores bash completion script" "false" \
+  "$(grep -q '# tampered' "${_GEN_CLI}/_testcli.comp.sh" 2>/dev/null && echo true || echo false)"
+
+_assert "update restores zsh completion script" "false" \
+  "$(grep -q '# tampered' "${_GEN_CLI}/_testcli.zcomp.sh" 2>/dev/null && echo true || echo false)"
 
 _assert "modules untouched after update" "true" \
   "$([[ -f "${_GEN_CLI}/modules/hello.sh" ]] && echo true || echo false)"

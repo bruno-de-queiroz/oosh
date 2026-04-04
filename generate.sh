@@ -54,11 +54,121 @@ _head "${NAME} ${DIM}→${RST} ${B}${OUT_DIR}"
 
 if [[ -d "$OUT_DIR" ]]; then
   if [[ -f "${OUT_DIR}/oo.sh" ]]; then
-    printf "  ${DOT}  ${B}${OUT_DIR} already exists.${RST} ${DIM}Update oo.sh? (Y/n)${RST} "
+    printf "  ${DOT}  ${B}${OUT_DIR} already exists.${RST} ${DIM}Update framework files? (Y/n)${RST} "
     read -n 1 -r REPLY; echo ""
     if [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
       cp "${OOSH_DIR}/oo.sh" "${OUT_DIR}/oo.sh"
       _step "oo.sh" "framework updated"
+
+      cat > "${OUT_DIR}/${NAME}.sh" <<ENTRY
+#!/bin/bash
+export ${NAME_UPPER}_DIR="\${${NAME_UPPER}_DIR:-\$HOME/.${NAME}}"
+export MODULES_DIR="\${${NAME_UPPER}_DIR}/modules"
+
+#import oo.sh
+. "\${${NAME_UPPER}_DIR}/oo.sh"
+
+MODULES=""
+for _f in "\${MODULES_DIR}"/*.sh; do
+  [[ -f "\$_f" ]] && MODULES="\${MODULES:+\${MODULES} }\$(basename "\${_f%.sh}")"
+done
+unset _f
+
+function _shortlist() {
+  local all=("\$@")
+  local module="\${all[0]}"
+
+  if [[ -f "\${MODULES_DIR}/\${module}.sh" ]]; then
+    all=("\${all[@]:1}")
+    "\${MODULES_DIR}/\${module}.sh" shortlist "\${all[@]}"
+  elif [[ "\$module" == "help" ]]; then
+    _default_shortlist "\$@"
+    [[ -z "\${all[1]}" ]] && echo "\$MODULES"
+  else
+    _default_shortlist "\$@"
+    echo "\$MODULES"
+  fi
+}
+
+function _help() {
+  printf "\n  \${_DIM}Usage:\${_RST} \${_B}${NAME}\${_RST} \${_CY}[ \${MODULES} help ]\${_RST}\n"
+  printf "\n  \${_B}Commands:\${_RST}\n"
+  printf "  \${_CY}%-20s\${_RST} \${_DIM}%s\${_RST}\n" "help" "show options and flags available"
+  printf "\n  \${_B}Modules:\${_RST}\n"
+  for module in \$MODULES; do
+    if [[ -f "\${MODULES_DIR}/\${module}.sh" ]]; then
+      local description="" _desc_line _pfx="#@module"
+      while IFS= read -r _desc_line; do
+        [[ "\$_desc_line" == '#@module'* ]] || continue
+        description="\${_desc_line#"\$_pfx"}"
+        description="\${description#"\${description%%[! ]*}"}"
+        break
+      done < "\${MODULES_DIR}/\${module}.sh"
+      printf "  \${_MG}%-20s\${_RST} \${_DIM}%s\${_RST}\n" "\$module" "\$description"
+    fi
+  done
+  echo ""
+}
+
+function _call() {
+  local all=("\$@")
+  local module="\${all[0]}"
+
+  if [[ "\$module" =~ ^[a-zA-Z0-9_-]+\$ && -f "\${MODULES_DIR}/\${module}.sh" ]]; then
+    all=("\${all[@]:1}")
+    "\${MODULES_DIR}/\${module}.sh" "\${all[@]}"
+  else
+    _default_call "\$@"
+  fi
+}
+
+main "\$0" "\$@"
+ENTRY
+      chmod +x "${OUT_DIR}/${NAME}.sh"
+      _step "${NAME}.sh" "entry point updated"
+
+      cat > "${OUT_DIR}/${NAME}.comp.sh" <<COMP
+#!/bin/bash
+_${NAME}() {
+  local cur opts src
+  COMPREPLY=()
+
+  src="\${${NAME_UPPER}_PATH}/${NAME}"
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+
+  opts=\$("\$src" shortlist "\${COMP_WORDS[@]:1:COMP_CWORD-1}")
+  case "\$opts" in
+    __file__)
+      compopt -o filenames 2>/dev/null
+      COMPREPLY=(\$(compgen -f -- "\${cur}")) ;;
+    __dir__)
+      compopt -o filenames 2>/dev/null
+      COMPREPLY=(\$(compgen -d -- "\${cur}")) ;;
+    *)
+      compopt +o filenames 2>/dev/null
+      COMPREPLY=(\$(compgen -W "\${opts}" -- "\${cur}")) ;;
+  esac
+  return 0
+}
+complete -o filenames -F _${NAME} ${NAME}
+COMP
+      _step "${NAME}.comp.sh" "bash completion updated"
+
+      cat > "${OUT_DIR}/${NAME}.zcomp.sh" <<ZCOMP
+_${NAME}() {
+  local src opts
+  src="\${${NAME_UPPER}_PATH}/${NAME}"
+  opts=\$("\$src" shortlist "\${(@)words[2,\$((CURRENT-1))]}" 2>/dev/null)
+  case "\$opts" in
+    __file__) _files ;;
+    __dir__)  _files -/ ;;
+    *)        [[ -n "\$opts" ]] && compadd -- \${=opts} ;;
+  esac
+}
+compdef _${NAME} ${NAME}
+ZCOMP
+      _step "${NAME}.zcomp.sh" "zsh completion updated"
+
       printf "\n  ${GR}${B}Done!${RST}\n\n"
     else
       printf "  ${DIM}   Skipped${RST}\n\n"
@@ -97,6 +207,9 @@ function _shortlist() {
   if [[ -f "\${MODULES_DIR}/\${module}.sh" ]]; then
     all=("\${all[@]:1}")
     "\${MODULES_DIR}/\${module}.sh" shortlist "\${all[@]}"
+  elif [[ "\$module" == "help" ]]; then
+    _default_shortlist "\$@"
+    [[ -z "\${all[1]}" ]] && echo "\$MODULES"
   else
     _default_shortlist "\$@"
     echo "\$MODULES"
@@ -267,9 +380,15 @@ function _find_comp_dir() {
 
 #@public ~ install the ${NAME} cli
 function cli() {
-  if [[ -n \$(command -v ${NAME}) ]]; then
-    _info "${NAME} is already installed"
-    return 0
+  local _existing_bin
+  _existing_bin=\$(command -v ${NAME} 2>/dev/null || true)
+  if [[ -n "\$_existing_bin" ]]; then
+    if [[ -e "\$_existing_bin" ]]; then
+      _info "${NAME} is already installed"
+      return 0
+    fi
+    _info "${NAME} symlink is broken — reinstalling"
+    rm -f "\$_existing_bin"
   fi
 
   local binDir=\$(_find_bin_dir)

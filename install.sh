@@ -78,6 +78,42 @@ chmod +x "${OOSH_HOME}/oosh"
 ln -sf "${OOSH_HOME}/oosh" "${BIN_DIR}/oosh"
 printf "  ${OK}  ${B}oosh${RST} ${DIM}→ ${BIN_DIR}/oosh${RST}\n"
 
+# --- oosh tab completion ---
+cat > "${OOSH_HOME}/oosh.comp.sh" << 'COMP'
+_oosh_complete() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${COMP_CWORD}" in
+    1) COMPREPLY=($(compgen -W "trace lint" -- "$cur")) ;;
+    *) COMPREPLY=($(compgen -f -- "$cur")) ;;
+  esac
+}
+complete -F _oosh_complete oosh
+COMP
+
+cat > "${OOSH_HOME}/oosh.zcomp.sh" << 'ZCOMP'
+_oosh_complete() {
+  case "$CURRENT" in
+    2) compadd -- trace lint ;;
+    *) _files ;;
+  esac
+}
+compdef _oosh_complete oosh
+ZCOMP
+
+_add_comp_to_profile() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  if [[ "$f" == *".zshrc" ]]; then
+    grep -qF "oosh.zcomp.sh" "$f" || printf '\n# oosh completion\n[[ -f "%s" ]] && source "%s"\n' "${OOSH_HOME}/oosh.zcomp.sh" "${OOSH_HOME}/oosh.zcomp.sh" >> "$f"
+  else
+    grep -qF "oosh.comp.sh" "$f" || printf '\n# oosh completion\n[[ -f "%s" ]] && . "%s"\n' "${OOSH_HOME}/oosh.comp.sh" "${OOSH_HOME}/oosh.comp.sh" >> "$f"
+  fi
+}
+_add_comp_to_profile "${HOME}/.bashrc"
+_add_comp_to_profile "${HOME}/.bash_profile"
+_add_comp_to_profile "${HOME}/.zshrc"
+printf "  ${OK}  oosh tab completion configured\n"
+
 # --- update shell profiles if using ~/.local/bin ---
 NEEDS_PATH_UPDATE=0
 if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
