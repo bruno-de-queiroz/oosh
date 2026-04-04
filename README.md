@@ -6,7 +6,7 @@ An annotation-driven bash CLI framework with a built-in generator. ✨
 
 Sprinkle some annotations on your functions and get help text, autocompletion, and flag parsing **for free**. Supports bash 3.2+ (macOS & Linux) -- no exotic dependencies, just good ol' bash. 🐚
 
-**~45 lines of annotations replace ~130 lines of manual flag parsing, case statements, help text, and completion logic — for 6-17ms overhead on macOS, 6-9ms on Linux.**
+**~45 lines of annotations replace ~130 lines of manual flag parsing, case statements, help text, and completion logic — for 7-12ms overhead on macOS, 2-4ms on Linux.**
 
 ## 🚀 Quick start
 
