@@ -271,12 +271,45 @@ function run() { echo "DEBUG=\$DEBUG"; }
 main \$0 "\$@"
 SCRIPT
 
+# Fixture: #default without #public (the bug scenario)
+cat > /tmp/_oosh_test_default_no_public.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@default
+function my_default() { echo "default executed"; }
+main \$0 "\$@"
+SCRIPT
+
 # Fixture: no default specified (should show help)
 cat > /tmp/_oosh_test_no_default.sh << SCRIPT
 #!/bin/bash
 . ${OOSH_DIR}/oo.sh
 #@public ~ say hi
 function greet() { echo "hi"; }
+main \$0 "\$@"
+SCRIPT
+
+# Fixture: #@default + #@public combined (visible default)
+cat > /tmp/_oosh_test_default_public.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@version 2.0.0
+#@flag -d|--debug DEBUG "false" boolean ~ enable debug output
+#@default
+#@public ~ run the main process
+function run() { echo "DEBUG=\$DEBUG"; }
+#@public ~ show status
+function status() { echo "STATUS=ok"; }
+main \$0 "\$@"
+SCRIPT
+
+# Fixture: #@public before #@default (reversed annotation order)
+cat > /tmp/_oosh_test_default_order.sh << SCRIPT
+#!/bin/bash
+. ${OOSH_DIR}/oo.sh
+#@public ~ run it
+#@default
+function run() { echo "order=ok"; }
 main \$0 "\$@"
 SCRIPT
 
@@ -290,7 +323,8 @@ cleanup() {
        /tmp/_oosh_test_escaped_quotes.sh /tmp/_oosh_test_malformed.sh \
        /tmp/_oosh_test_required.sh \
        /tmp/_oosh_test_module_child.sh /tmp/_oosh_test_module_parent.sh \
-       /tmp/_oosh_test_doubledash.sh
+       /tmp/_oosh_test_doubledash.sh \
+       /tmp/_oosh_test_default_public.sh /tmp/_oosh_test_default_order.sh
 }
 trap cleanup EXIT
 
@@ -744,12 +778,88 @@ _assert_contains "-h shows help instead of running default" \
   "Usage:" \
   "$(bash /tmp/_oosh_test_default.sh -h 2>&1)"
 
+# Bug fix verification: #@default without #@public should still work
+_assert "default without public annotation works" \
+  "default executed" \
+  "$(bash /tmp/_oosh_test_default_no_public.sh)"
+
 # Note: protected functions are NOT added to GLOBAL_METHODS, so they can't be called by name
 # The default function runs when no args provided
 
 _assert_contains "no default specified: shows help on no args" \
   "Usage:" \
   "$(bash /tmp/_oosh_test_no_default.sh 2>&1)"
+
+_assert "default+public: runs as default with no args" \
+  "DEBUG=false" \
+  "$(bash /tmp/_oosh_test_default_public.sh)"
+
+_assert "default+public: callable by explicit name" \
+  "DEBUG=false" \
+  "$(bash /tmp/_oosh_test_default_public.sh run)"
+
+_assert "default+public: flag works via explicit name" \
+  "DEBUG=true" \
+  "$(bash /tmp/_oosh_test_default_public.sh run --debug)"
+
+_assert_contains "default+public: function appears in help" \
+  "run" \
+  "$(bash /tmp/_oosh_test_default_public.sh --help 2>&1)"
+
+_assert_contains "default+public: shortlist includes run" \
+  "run" \
+  "$(bash /tmp/_oosh_test_default_public.sh shortlist)"
+
+_assert_contains "default+public: other public commands still work" \
+  "STATUS=ok" \
+  "$(bash /tmp/_oosh_test_default_public.sh status)"
+
+_assert_contains "default+public: --version shows version not default" \
+  "2.0.0" \
+  "$(bash /tmp/_oosh_test_default_public.sh --version)"
+
+_assert_contains "default+public: version subcommand shows version not default" \
+  "2.0.0" \
+  "$(bash /tmp/_oosh_test_default_public.sh version)"
+
+_assert_contains "default+public: help subcommand shows help not default" \
+  "Usage:" \
+  "$(bash /tmp/_oosh_test_default_public.sh help 2>&1)"
+
+_assert "default annotation order: #@public then #@default works" \
+  "order=ok" \
+  "$(bash /tmp/_oosh_test_default_order.sh)"
+
+_assert_perf "default: dispatch within budget" 150 \
+  bash /tmp/_oosh_test_default_public.sh
+
+_assert_contains "default: shortlist includes global flags" \
+  "--debug" \
+  "$(bash /tmp/_oosh_test_default.sh shortlist)"
+
+_assert_contains "default+public: shortlist includes global flags" \
+  "--debug" \
+  "$(bash /tmp/_oosh_test_default_public.sh shortlist)"
+
+_assert_contains "no default: shortlist includes global flags" \
+  "--verbose" \
+  "$(bash /tmp/_oosh_test_flags.sh shortlist)"
+
+_assert_contains "no default: shortlist includes command-scoped flags" \
+  "--dry-run" \
+  "$(bash /tmp/_oosh_test_flags.sh shortlist test-bool)"
+
+_assert_contains "shortlist help lists commands" \
+  "deploy" \
+  "$(bash /tmp/_oosh_test_normalize.sh shortlist help)"
+
+_assert_not_contains "shortlist help excludes help itself" \
+  "help" \
+  "$(bash /tmp/_oosh_test_normalize.sh shortlist help)"
+
+_assert "shortlist help <cmd> returns nothing" \
+  "" \
+  "$(bash /tmp/_oosh_test_normalize.sh shortlist help deploy)"
 
 # ============================================================
 printf "\n\033[1m Required flags \033[0m\n\n"

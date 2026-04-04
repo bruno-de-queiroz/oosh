@@ -50,15 +50,16 @@ _error() { printf "  ${_RD}✘${_RST}  %s\n" "$*" >&2; }
 _die()   { _error "$*"; exit 2; }
 
 _resolve_enum() {
+  _ENUM_RESULT=""
   local _el=" ${_SL_ENUM}" _key="$1"
   local _re_dyn='^\$\{([^}]+)\}$'
   if [[ "$_el" == *" ${_key}="* ]]; then
     local _tmp="${_el#* ${_key}=}"; _tmp="${_tmp%% *}"
     if [[ "$_tmp" =~ $_re_dyn ]]; then
       local _fn="${BASH_REMATCH[1]}"
-      [[ "$_fn" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && "${_fn}" 2>/dev/null
+      [[ "$_fn" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] && _ENUM_RESULT=$("${_fn}" 2>/dev/null)
     else
-      echo "${_tmp//,/ }"
+      _ENUM_RESULT="${_tmp//,/ }"
     fi
   fi
 }
@@ -72,8 +73,8 @@ _default_shortlist() {
       elif [[ " ${_SL_DIR_FLAGS}" == *" ${2} "* || " ${_SL_DIR_FLAGS}" == *" ${1}:${2} "* ]]; then
         echo __dir__
       else
-        local _r=$(_resolve_enum "${2}"); [[ -z "$_r" ]] && _r=$(_resolve_enum "${1}:${2}")
-        [[ -n "$_r" ]] && echo "$_r"
+        _resolve_enum "${2}"; [[ -z "$_ENUM_RESULT" ]] && _resolve_enum "${1}:${2}"
+        [[ -n "$_ENUM_RESULT" ]] && echo "$_ENUM_RESULT"
       fi
       return 0
     fi
@@ -93,14 +94,27 @@ _default_shortlist() {
     elif [[ " ${_SL_DIR_FLAGS}" == *" ${1} "* ]]; then
       echo __dir__
     else
-      local _r=$(_resolve_enum "${1}"); [[ -n "$_r" ]] && echo "$_r"
+      _resolve_enum "${1}"; [[ -n "$_ENUM_RESULT" ]] && echo "$_ENUM_RESULT"
     fi
     return 0
+  elif [[ "$1" == "help" ]]; then
+    [[ -n "$2" ]] && return 0
+    if [[ -n "$GLOBAL_METHODS" ]]; then
+      while IFS= read -r _ml; do
+        [[ -n "$_ml" ]] && echo "${_ml%% *}"
+      done <<< "$GLOBAL_METHODS"
+    fi
   else
     if [[ -n "$GLOBAL_METHODS" ]]; then
       while IFS= read -r _ml; do
         [[ -n "$_ml" ]] && echo "${_ml%% *}"
       done <<< "$GLOBAL_METHODS"
+    fi
+    if [[ -n "$GLOBAL_FLAGS" ]]; then
+      while IFS= read -r _fl; do
+        [[ -z "$_fl" || "$_fl" == *:* ]] && continue
+        local _fn="${_fl%% *}"; echo "${_fn//|/ }"
+      done <<< "$GLOBAL_FLAGS"
     fi
     echo help
   fi
@@ -120,7 +134,8 @@ _default_help() {
       [[ -z "$_fl" || "$_fl" != -* ]] && continue
       local _fn="${_fl%% *}"; _flags+="${_fn%%|*} "
       local _fr="${_fl#* }"; _fr="${_fr#"${_fr%%[![:space:]]*}"}"
-      _flag_details+="$(printf "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}" "$_fn" "$_fr")"$'\n'
+      local _fd; printf -v _fd "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}" "$_fn" "$_fr"
+      _flag_details+="${_fd}"$'\n'
     done <<< "$GLOBAL_FLAGS"
   fi
 
@@ -186,7 +201,8 @@ _default_command_help() {
       fi
       local _fn="${_line%% *}"; _flags+="${_fn%%|*} "
       local _fr="${_line#* }"; _fr="${_fr#"${_fr%%[![:space:]]*}"}"
-      _flag_lines+="$(printf "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}" "$_fn" "$_fr")"$'\n'
+      local _fl_fmt; printf -v _fl_fmt "  ${_YL}%-20s${_RST} ${_DIM}%s${_RST}" "$_fn" "$_fr"
+      _flag_lines+="${_fl_fmt}"$'\n'
     done <<< "$GLOBAL_FLAGS"
   fi
 
@@ -217,7 +233,7 @@ _default_call() {
     done
     "$first" "$@"; exit 0
   fi
-  case "$first" in
+  case "${first:-}" in
     shortlist)            _shortlist "$@" ;;
     help|--help|-h)
       if [[ -n "$1" ]] && [[ "${_nl}${GLOBAL_METHODS}" == *"${_nl}${1} "* ]]; then
@@ -319,7 +335,7 @@ main() {
     [[ "$_required" == true ]] && help_desc+=" (required)"
     [[ "$_is_array" == true ]] && help_desc+=" (multiple)"
     [[ -n "$_env_hint" ]] && help_desc+=" [env: ${_env_hint}]"
-    local help_line=$(printf "%-20s %s" "$p_flag" "$help_desc")
+    local help_line; printf -v help_line "%-20s %s" "$p_flag" "$help_desc"
     local _short="${p_flag%%|*}" _long="${p_flag#*|}"
 
     # --- Value extraction ---
@@ -464,7 +480,7 @@ main() {
       '#@'*|'#'*|'') ;;
       'function '*)
         _flush_flag
-        if [[ "$t" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) && (-n "$p_vis" || "$_p_default" == true) ]]; then
+        if [[ "$t" =~ ^function[[:space:]]+([a-zA-Z_][a-zA-Z0-9_-]*)[[:space:]]*\(\) ]] && [[ -n "$p_vis" || "$_p_default" == true ]]; then
           local fname="${BASH_REMATCH[1]}"
           if [[ "$_p_default" == true ]]; then
             _default_func="$fname"
@@ -472,7 +488,8 @@ main() {
           fi
           if [[ "$p_vis" == public ]]; then
             [[ -n "$methods" ]] && methods+=$'\n'
-            methods+="$(printf '%-20s %s' "$fname" "$p_desc")"
+            local _mfmt; printf -v _mfmt '%-20s %s' "$fname" "$p_desc"
+            methods+="$_mfmt"
           fi
           if [[ -n "$mf_help" ]]; then
             while IFS= read -r _ml; do
