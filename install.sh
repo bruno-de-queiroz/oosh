@@ -134,9 +134,14 @@ if [[ -d "${HOME}/.claude" ]]; then
   printf "  ${DOT}  ${B}Claude Code detected.${RST} ${DIM}Install /oosh skill? (Y/n)${RST} "
   read -n 1 -r REPLY; echo ""
   if [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
-    mkdir -p "${HOME}/.claude/skills/oosh"
-    curl -fsSL "${OOSH_REPO}/skill/SKILL.md" -o "${HOME}/.claude/skills/oosh/SKILL.md"
-    printf "  ${OK}  ${B}/oosh${RST} ${DIM}skill installed for Claude Code${RST}\n"
+    local _skill _skills="oosh oosh-module oosh-lint oosh-trace"
+    mkdir -p "${HOME}/.claude/skills/oosh/references"
+    for _skill in $_skills; do
+      mkdir -p "${HOME}/.claude/skills/${_skill}"
+      curl -fsSL "${OOSH_REPO}/skill/${_skill}/SKILL.md" -o "${HOME}/.claude/skills/${_skill}/SKILL.md"
+    done
+    curl -fsSL "${OOSH_REPO}/skill/references/annotations.md" -o "${HOME}/.claude/skills/oosh/references/annotations.md"
+    printf "  ${OK}  ${B}/oosh /oosh-module /oosh-lint /oosh-trace${RST} ${DIM}skills installed${RST}\n"
   fi
 fi
 

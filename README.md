@@ -400,21 +400,25 @@ That's it -- no config files, no registration, no build step. The module is auto
 
 ## 🧠 Claude Code Skill
 
-The installer optionally installs a `/oosh` skill for [Claude Code](https://claude.ai/code), giving you slash commands to work with oosh from within your editor:
+The installer optionally installs skills for [Claude Code](https://claude.ai/code), giving you slash commands to work with oosh from within your editor:
 
 | Command | What it does |
 |---|---|
 | `/oosh <name>` | Scaffold a new CLI |
-| `/oosh new-module <cli> <module>` | Create a new module with proper annotations |
-| `/oosh lint <cli> [module]` | Lint annotations and offer auto-fixes |
-| `/oosh trace <cli> [module]` | Profile tab-completion and flag slow resolvers |
+| `/oosh-module <cli> <module>` | Create a new module with proper annotations |
+| `/oosh-lint <cli> [module]` | Lint annotations and offer auto-fixes |
+| `/oosh-trace <cli> [module]` | Profile tab-completion and flag slow resolvers |
 
-The skill is installed to `~/.claude/skills/oosh/` during `install.sh` (only prompted if Claude Code is detected). To install it manually:
+Skills are installed to `~/.claude/skills/` during `install.sh` (only prompted if Claude Code is detected). To install manually:
 
 ```bash
-mkdir -p ~/.claude/skills/oosh
-curl -fsSL https://raw.githubusercontent.com/bruno-de-queiroz/oosh/main/skill/SKILL.md \
-  -o ~/.claude/skills/oosh/SKILL.md
+REPO="https://raw.githubusercontent.com/bruno-de-queiroz/oosh/main"
+for skill in oosh oosh-module oosh-lint oosh-trace; do
+  mkdir -p ~/.claude/skills/$skill
+  curl -fsSL "$REPO/skill/$skill/SKILL.md" -o ~/.claude/skills/$skill/SKILL.md
+done
+mkdir -p ~/.claude/skills/oosh/references
+curl -fsSL "$REPO/skill/references/annotations.md" -o ~/.claude/skills/oosh/references/annotations.md
 ```
 
 ## 📋 Known limitations
