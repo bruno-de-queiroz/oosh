@@ -23,7 +23,7 @@ mytool install
 
 Drop more `.sh` files into `modules/` and they're auto-discovered. That's it. Go build something cool. 🔧
 
-[Annotations](#-annotations-reference) · [Flags](#-flag-syntax) · [Modules](#-module-structure) · [Customizing](#-customizing) · [Autocompletion](#-autocompletion) · [Colors](#-colors) · [Generator](#-generator) · [Agent-friendly](#-agent-friendly) · [Limitations](#-known-limitations) · [Cheatsheet](#-cheatsheet) · [Performance](#-performance)
+[Annotations](#-annotations-reference) · [Flags](#-flag-syntax) · [Modules](#-module-structure) · [Customizing](#-customizing) · [Autocompletion](#-autocompletion) · [Colors](#-colors) · [Generator](#-generator) · [Agent-friendly](#-agent-friendly) · [Claude Code](#-claude-code-skill) · [Limitations](#-known-limitations) · [Cheatsheet](#-cheatsheet) · [Performance](#-performance)
 
 ### 🎬 What the generator looks like
 
@@ -397,6 +397,25 @@ main $0 "$@"
 ```
 
 That's it -- no config files, no registration, no build step. The module is auto-discovered and immediately available with help text, flag parsing, and tab completion. Agents can scaffold entire CLIs by generating one module per concern. 🧩
+
+## 🧠 Claude Code Skill
+
+The installer optionally installs a `/oosh` skill for [Claude Code](https://claude.ai/code), giving you slash commands to work with oosh from within your editor:
+
+| Command | What it does |
+|---|---|
+| `/oosh <name>` | Scaffold a new CLI |
+| `/oosh new-module <cli> <module>` | Create a new module with proper annotations |
+| `/oosh lint <cli> [module]` | Lint annotations and offer auto-fixes |
+| `/oosh trace <cli> [module]` | Profile tab-completion and flag slow resolvers |
+
+The skill is installed to `~/.claude/skills/oosh/` during `install.sh` (only prompted if Claude Code is detected). To install it manually:
+
+```bash
+mkdir -p ~/.claude/skills/oosh
+curl -fsSL https://raw.githubusercontent.com/bruno-de-queiroz/oosh/main/skill/SKILL.md \
+  -o ~/.claude/skills/oosh/SKILL.md
+```
 
 ## 📋 Known limitations
 

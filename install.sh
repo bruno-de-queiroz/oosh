@@ -129,6 +129,17 @@ if [[ "${BIN_DIR}" == "${HOME}/.local/bin" ]]; then
   printf "  ${OK}  PATH updated in shell profiles\n"
 fi
 
+# --- Claude Code skill (optional) ---
+if [[ -d "${HOME}/.claude" ]]; then
+  printf "  ${DOT}  ${B}Claude Code detected.${RST} ${DIM}Install /oosh skill? (Y/n)${RST} "
+  read -n 1 -r REPLY; echo ""
+  if [[ "${REPLY:-y}" =~ ^[Yy]$ ]]; then
+    mkdir -p "${HOME}/.claude/skills/oosh"
+    curl -fsSL "${OOSH_REPO}/skill/SKILL.md" -o "${HOME}/.claude/skills/oosh/SKILL.md"
+    printf "  ${OK}  ${B}/oosh${RST} ${DIM}skill installed for Claude Code${RST}\n"
+  fi
+fi
+
 # --- done ---
 printf "\n  ${GR}${B}Done!${RST} ${DIM}Get started:${RST}\n\n"
 
