@@ -602,13 +602,13 @@ oosh parses annotations at runtime — no compilation, no caching. The display a
 
 | Operation | bash | oosh | Overhead |
 |---|---|---|---|
-| Tab-complete: top-level | 16ms | 27ms | +11ms |
-| Tab-complete: command flags | 16ms | 27ms | +11ms |
-| Tab-complete: enum values | 16ms | 27ms | +11ms |
-| Help | 16ms | 33ms | +17ms |
-| Dispatch: simple command | 16ms | 26ms | +10ms |
-| Dispatch: enum + number flags | 16ms | 27ms | +11ms |
-| Dispatch: all flags combined | 16ms | 27ms | +11ms |
+| Tab-complete: top-level | 6ms | 13ms | +7ms |
+| Tab-complete: command flags | 6ms | 14ms | +8ms |
+| Tab-complete: enum values | 6ms | 14ms | +8ms |
+| Help | 6ms | 18ms | +12ms |
+| Dispatch: simple command | 6ms | 13ms | +7ms |
+| Dispatch: enum + number flags | 6ms | 14ms | +8ms |
+| Dispatch: all flags combined | 6ms | 15ms | +9ms |
 
 **Linux (bash 5.1, Docker ubuntu:22.04, 20 runs)**
 
@@ -622,7 +622,7 @@ oosh parses annotations at runtime — no compilation, no caching. The display a
 | Dispatch: enum + number flags | 4ms | 6ms | +2ms |
 | Dispatch: all flags combined | 4ms | 6ms | +2ms |
 
-Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 2-17ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~14-16ms on macOS, ~4ms on Linux).
+Worth noting: the pure bash baseline is ~130 lines of tedious boilerplate (manual `case` flag parsing, `_parse_global_flags`, per-command `while/case` loops, hand-written help text, hand-written completion function). The oosh module is ~45 lines of annotations. That's the trade-off — 2-12ms overhead for 3x less code and zero manual flag parsing. All times include bash startup (~6ms on macOS, ~4ms on Linux).
 
 Usage errors (invalid flags, missing required flags, unknown commands) exit with code 2 following POSIX convention. Runtime errors exit with code 1.
 
