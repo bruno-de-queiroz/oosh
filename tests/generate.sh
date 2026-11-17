@@ -101,6 +101,30 @@ _assert "modules untouched after update" "true" \
   "$([[ -f "${_GEN_CLI}/modules/hello.sh" ]] && echo true || echo false)"
 
 # ============================================================
+printf "\n\033[1m Generator: hyphenated name \033[0m\n\n"
+
+_HY_DIR="/tmp/_oosh_gen_hyphen_test"
+rm -rf "${_HY_DIR}"
+printf "yn" | bash "${OOSH_DIR}/generate.sh" --no-color my-tool "${_HY_DIR}" >/dev/null 2>&1
+_HY_CLI="${_HY_DIR}/my-tool"
+trap 'rm -rf /tmp/_oosh_gen_test "${_HY_DIR}"' EXIT
+
+_assert "hyphenated name creates entry point" "true" \
+  "$([[ -f "${_HY_CLI}/my-tool.sh" ]] && echo true || echo false)"
+
+_assert_contains "entry point exports an underscored dir variable" "export MY_TOOL_DIR=" \
+  "$(cat "${_HY_CLI}/my-tool.sh")"
+
+_assert_not_contains "entry point has no hyphenated variable name" "MY-TOOL_DIR" \
+  "$(cat "${_HY_CLI}"/*.sh "${_HY_CLI}"/modules/*.sh)"
+
+_assert_contains "hyphenated CLI shows its modules in help" "hello" \
+  "$(env MY_TOOL_DIR="${_HY_CLI}" NO_COLOR=1 bash "${_HY_CLI}/my-tool.sh" help 2>&1)"
+
+_assert_contains "hyphenated CLI dispatches to a module command" "Hello, world!" \
+  "$(env MY_TOOL_DIR="${_HY_CLI}" NO_COLOR=1 bash "${_HY_CLI}/my-tool.sh" hello greet 2>&1)"
+
+# ============================================================
 printf "\n\033[1m Performance \033[0m\n\n"
 
 # Generated module

@@ -40,7 +40,8 @@ OOSH_DIR="$(cd "$(dirname "$(_resolve "$0")")" && pwd)"
 
 NAME="$1"
 [[ "$NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || { printf "  error: name must match [a-zA-Z_][a-zA-Z0-9_-]*\n" >&2; exit 1; }
-NAME_UPPER="$(echo "$NAME" | tr '[:lower:]' '[:upper:]')"
+# The name becomes part of env var names (<NAME>_DIR, <NAME>_PATH), which cannot contain hyphens.
+NAME_UPPER="$(echo "$NAME" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
 [[ -n "${2:-}" ]] && OUT_DIR="${2}/${NAME}" || OUT_DIR="${HOME}/.${NAME}"
 
 # --- banner ---
